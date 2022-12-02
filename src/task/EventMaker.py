@@ -168,8 +168,8 @@ if __name__ == "__main__":
     em = EventMaker(T,B)
 
     # provide the list of feature values, and the location of the shared feature
-    feature_value_list = np.array([1,2,1,0,1])
-    shared_feature_id = 4
+    feature_value_list = np.array([0,2,1,0,1])
+    shared_feature_id = 2
     lure_feature_value_list = em.make_lure_feature_value_list(feature_value_list, shared_feature_id)
     print(f'targ  = {feature_value_list}')
     print(f'lure = {lure_feature_value_list}')
@@ -202,4 +202,15 @@ if __name__ == "__main__":
         axes[2].add_patch(rect)
         f.tight_layout()
 
-    '''question: does ths subject see the answer once they respond to the query regardless of whether they got it right? '''
+    '''  notes 
+    1. within trial query needed to encourage the model to maintain WM for everything
+    - maybe 1 random query at the end after each event
+        - shared feature or the event label is never queried
+        - Q: do we have to query the shared feature and the event label?
+            - the shared feature will be encoded because the model doesn't know which one is shared
+    2. during test, query at t = 3/4/5
+
+    3. a concern: some slots are shared across events but some are not
+    4. a concern: # possible feature values are different across slots; "shared slots" might have more feature values on average
+
+    '''

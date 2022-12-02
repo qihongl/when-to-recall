@@ -66,6 +66,8 @@ if __name__ == "__main__":
     B = 4
     exp = SimpleExp2(T,B)
 
+    (4**4)
+
     n_epochs = 1
     for i in range(n_epochs):
         X, Y = exp.make_data()

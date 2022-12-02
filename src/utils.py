@@ -4,10 +4,10 @@ import numpy as np
 def onehot(n, k):
     '''
     return a n-D one hot vector and the k-th entry is 1
-    * k uses 1 based indexing, so onehot(n, n) is valid, which is more intuitive
+    * k uses 0 based indexing, so onehot(n, n) is invalid
     '''
     assert k <= n
-    return np.eye(n)[k-1]
+    return np.eye(n)[k]
 
 def to_pth(np_array, pth_dtype=torch.FloatTensor):
     return torch.tensor(np_array).type(pth_dtype)
