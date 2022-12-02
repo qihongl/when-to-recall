@@ -64,7 +64,11 @@ if __name__ == "__main__":
     n_epochs = 1
     for i in range(n_epochs):
         X = exp.make_data()
-        print(X.shape)
-        for j in range(3): # loop over {targ, lure, targ_test}
-            for t in range(T):
-                print(np.shape(X[i,j,t]))
+        n_trials = X.shape[0]
+        for j in range(n_trials):
+            print(f'Trial {j}')
+            np.random.permutation(X.shape[0])
+            for k in range(3): # loop over {targ, lure, targ_test}
+                print(f'\tk = {k}')
+                for t in range(T):
+                    print(f'\t\tt = {t}, input shape = {np.shape(X[j,k,t])}')
