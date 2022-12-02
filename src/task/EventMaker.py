@@ -201,3 +201,5 @@ if __name__ == "__main__":
         rect = patches.Rectangle((0-.5, em.loc_sf_test[trial_type]-.5), T+B, 1, linewidth=3, edgecolor='red', facecolor='none')
         axes[2].add_patch(rect)
         f.tight_layout()
+
+    '''question: does ths subject see the answer once they respond to the query regardless of whether they got it right? '''

@@ -11,6 +11,7 @@ class SimpleExp2():
         self.em = EventMaker(T, B)
         self.x_dim = T+B
         self.y_dim = B
+        self.stimuli_order = None
 
     def sample_feature_values(self):
         return np.random.choice(range(0, self.B), size=(self.T-1,))
@@ -39,12 +40,16 @@ class SimpleExp2():
             targ_study, lure_study, targ_test = self.em.make_stimuli(feature_value_list, shared_feature_id, trial_type)
             # see target -> lure -> test; since WM is flushed between events, order doesn't matter
             X_i = np.stack([targ_study, lure_study, targ_test])
+            self.stimuli_order = ['targ', 'lure', 'test']
             X.append(X_i)
+        # form X and Y
         X = np.array(X)
+        Y = X[:,:,:,self.T:] # only need to output the feature value
         # type conversion
         if to_torch:
             X = to_pth(X)
-        return X
+            Y = to_pth(Y)
+        return X, Y
 
 
 
@@ -63,12 +68,12 @@ if __name__ == "__main__":
 
     n_epochs = 1
     for i in range(n_epochs):
-        X = exp.make_data()
+        X, Y = exp.make_data()
         n_trials = X.shape[0]
         for j in range(n_trials):
             print(f'Trial {j}')
             np.random.permutation(X.shape[0])
-            for k in range(3): # loop over {targ, lure, targ_test}
-                print(f'\tk = {k}')
+            for k in range(len(exp.stimuli_order)): # loop over {targ, lure, targ_test}
+                print(f'\tk = {k} - {exp.stimuli_order[k]}')
                 for t in range(T):
                     print(f'\t\tt = {t}, input shape = {np.shape(X[j,k,t])}')
