@@ -12,14 +12,17 @@ def onehot(n, k):
 def to_pth(np_array, pth_dtype=torch.FloatTensor):
     return torch.tensor(np_array).type(pth_dtype)
 
-
 def to_sqpth(np_array, pth_dtype=torch.FloatTensor):
     return torch.squeeze(to_pth(np_array, pth_dtype=pth_dtype))
 
+def list_to_pth(list_of_arr, pth_dtype=torch.FloatTensor):
+    return [to_pth(arr, pth_dtype=pth_dtype) for arr in list_of_arr]
+
+def list_to_sqpth(list_of_arr, pth_dtype=torch.FloatTensor):
+    return [to_sqpth(arr, pth_dtype=pth_dtype) for arr in list_of_arr]
 
 def to_np(torch_tensor):
     return torch_tensor.data.numpy()
-
 
 def to_sqnp(torch_tensor, dtype=np.float):
     return np.array(np.squeeze(to_np(torch_tensor)), dtype=dtype)

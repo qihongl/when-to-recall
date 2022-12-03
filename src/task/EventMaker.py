@@ -202,15 +202,18 @@ if __name__ == "__main__":
         axes[2].add_patch(rect)
         f.tight_layout()
 
-    '''  notes 
+    '''  notes
     1. within trial query needed to encourage the model to maintain WM for everything
     - maybe 1 random query at the end after each event
         - shared feature or the event label is never queried
         - Q: do we have to query the shared feature and the event label?
             - the shared feature will be encoded because the model doesn't know which one is shared
     2. during test, query at t = 3/4/5
-
     3. a concern: some slots are shared across events but some are not
+        - e.g. location
+            - mechanism:
+                - location gets trained more
+                - location has highly informative co-occur stats
     4. a concern: # possible feature values are different across slots; "shared slots" might have more feature values on average
 
     '''

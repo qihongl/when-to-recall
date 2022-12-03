@@ -14,6 +14,7 @@ sns.set(style='white', palette='colorblind', context='poster')
 '''init task'''
 T = 5
 B = 4
+penalty = 3
 exp = SimpleExp2(T,B)
 
 '''init model'''
@@ -38,21 +39,27 @@ optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr)
 
 
 '''train the model'''
-n_epochs = 1
+n_epochs = 2
+log_sf_ids = np.zeros((n_epochs, exp.n_trios))
+log_trial_types = [None] * n_epochs
+log_wtq_ids = np.zeros((n_epochs, exp.n_trios, 2))
 for i in range(n_epochs):
-    X, Y = exp.make_data(to_torch=True)
-    n_trials = X.shape[0]
-    for j in range(n_trials):
-        print(f'Trial {j}')
-        np.random.permutation(X.shape[0])
+    X, Y, log_sf_ids[i], log_trial_types[i], log_wtq_ids[i] = exp.make_data(to_torch=True)
+    for j in range(exp.n_trios):
+        print(f'Trio {j}')
+        np.random.permutation(exp.n_trios)
         for k in range(len(exp.stimuli_order)): # loop over {targ, lure, targ_test}
             print(f'\tk = {k} - {exp.stimuli_order[k]}')
             # at the beginning of each sub-trial, flush WM
             hc_t = agent.get_init_states()
             for t in range(T):
-                print(f'\t\tt = {t}, input shape = {np.shape(X[j,k,t])}')
+                print(f'\t\tt = {t}, input shape = {np.shape(X[j][k][t])}, output shape = {np.shape(Y[j][k][t])}')
                 # forward
-                pi_a_t, v_t, hc_t, cache_t = agent(X[j,k,t].view(1, 1, -1), hc_t)
+                pi_a_t, v_t, hc_t, cache_t = agent(X[j][k][t].view(1, 1, -1), hc_t)
+
+            '''
+
+            '''
 
             # optimizer.zero_grad()
             # loss.backward()
