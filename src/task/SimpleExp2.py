@@ -145,7 +145,7 @@ if __name__ == "__main__":
             # np.random.permutation(X.shape[0])
             for k in range(len(exp.stimuli_order)): # loop over {targ, lure, targ_test}
                 print(f'\tk = {k} - {exp.stimuli_order[k]}')
-                for t in range(T):
+                for t in range(len(X[j][k])):
                     print(f'\t\tt = {t}, input shape = {np.shape(X[j][k][t])}, output shape = {np.shape(Y[j][k][t])}')
 
     '''visualize the data for 1 trial (a trio) '''

@@ -20,7 +20,7 @@ penalty = 1
 exp = SimpleExp2(T,B)
 
 '''init model'''
-n_hidden = 64
+n_hidden = 32
 lr = 1e-3
 cmpt = .5
 x_dim = exp.x_dim
@@ -42,10 +42,11 @@ optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
 
 
 '''train the model'''
-n_epochs = 1000
+n_epochs = 200
 log_sf_ids = np.zeros((n_epochs, exp.n_trios))
 log_trial_types = [None] * n_epochs
 log_wtq_ids = np.zeros((n_epochs, exp.n_trios, 2))
+log_loss_s = torch.zeros((n_epochs, exp.n_trios, 3))
 log_loss_a = torch.zeros((n_epochs, exp.n_trios, 3))
 log_loss_c = torch.zeros((n_epochs, exp.n_trios, 3))
 log_return = torch.zeros((n_epochs, exp.n_trios, 3))
@@ -69,7 +70,7 @@ for i in range(n_epochs):
             # init loss
             loss_sup, loss_rl, returns = 0, 0, 0
             rewards, values, probs = [], [], []
-            for t in range(T):
+            for t in range(len(X[j][k])):
                 # print(f'\t\t\tt = {t}, input shape = {np.shape(X[j][k][t])}, output shape = {np.shape(Y[j][k][t])}')
                 # encode if and only if at event end
                 if t == T-1:
@@ -79,26 +80,27 @@ for i in range(n_epochs):
                 # forward
                 pi_a_t, v_t, hc_t, cache_t = agent(X[j][k][t].view(1, 1, -1), hc_t)
                 a_t, p_a_t = agent.pick_action(pi_a_t)
-                r_t = get_reward(a_t, Y[j][k][t], penalty)
+                r_t = get_reward(a_t, X[j][k][t], Y[j][k][t], penalty)
 
                 # collect results
                 rewards.append(r_t)
                 values.append(v_t)
                 probs.append(pi_a_t)
                 # # sup loss
-                # yhat_t = torch.squeeze(pi_a_t)[:-1]
-                # loss_sup += F.mse_loss(yhat_t, Y[j][k][t])
+                yhat_t = torch.squeeze(pi_a_t)[:-1]
+                loss_sup += F.mse_loss(yhat_t, Y[j][k][t])
 
             returns = compute_returns(rewards)
             loss_actor, loss_critic = compute_a2c_loss(probs, values, returns)
             loss_rl = loss_actor + loss_critic
             # at the end of one event
             optimizer.zero_grad()
-            # loss_sup.backward()
-            loss_rl.backward()
+            loss_sup.backward()
+            # loss_rl.backward()
             optimizer.step()
 
             # log info
+            log_loss_s[i,j,k] = loss_sup
             log_loss_a[i,j,k], log_loss_c[i,j,k] = loss_actor, loss_critic
             log_return[i,j,k] = torch.stack(rewards).sum()
 
@@ -106,16 +108,32 @@ for i in range(n_epochs):
         agent.flush_episodic_memory()
 
     # at the end of an epoch
-    print(f'Epoch {i} | L: c: %.2f, a: %.2f | R : %.2f' % (log_loss_a[i].mean(), log_loss_c[i].mean(), log_return[i].mean()))
+    print(f'Epoch {i} | L: a: %.2f, c: %.2f | R : %.2f' % (log_loss_a[i].mean(), log_loss_c[i].mean(), log_return[i].mean()))
 
 
 '''preproc the results'''
 
 '''plot the results'''
-f, ax = plt.subplots(1,1, figsize=(8,5))
-lc_return = [log_return[i].mean() for i in range(n_epochs)]
-ax.plot(lc_return)
-ax.set_xlabel('Epochs')
-ax.set_ylabel('Cumulative R')
-f.tight_layout()
-sns.despine()
+def plot_learning_curve(title, data):
+    f, ax = plt.subplots(1,1, figsize=(8,5))
+    lc_data = [data[i].mean() for i in range(n_epochs)]
+    ax.plot(lc_data)
+    ax.set_xlabel('Epochs')
+    ax.set_ylabel(title)
+    f.tight_layout()
+    sns.despine()
+    return f, ax
+
+
+plot_learning_curve('Cumulative R', log_return)
+plot_learning_curve('Loss - actor', log_loss_a)
+plot_learning_curve('Loss - critic', log_loss_c)
+
+
+# f, ax = plt.subplots(1,1, figsize=(8,5))
+# lc_return = [log_return[i].mean() for i in range(n_epochs)]
+# ax.plot(lc_return)
+# ax.set_xlabel('Epochs')
+# ax.set_ylabel('Cumulative R')
+# f.tight_layout()
+# sns.despine()

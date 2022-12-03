@@ -8,8 +8,9 @@ from torch.nn.functional import smooth_l1_loss
 eps = np.finfo(np.float32).eps.item()
 
 
-def get_reward(a_t, y_t, penalty, allow_dk=True):
+def get_reward(a_t, x_t, y_t, penalty):
     """define the reward function at time t
+    don't allow don't know response if it is an observation trial
 
     Parameters
     ----------
@@ -30,14 +31,21 @@ def get_reward(a_t, y_t, penalty, allow_dk=True):
     """
     assert penalty >= 0
     dk_id = y_t.size()[0]
+    if x_t.sum() == 1:
+        query_trial = True
+    else:
+        query_trial = False
 
     a_t_targ = torch.argmax(y_t)
-    
+
     # compare action vs. target action
-    if a_t == dk_id and allow_dk:
-        r_t = 0
-    elif a_t_targ == a_t:
+    if a_t == a_t_targ:
         r_t = 1
+    elif a_t == dk_id:
+        if query_trial:
+            r_t = 0
+        else:
+            r_t = -1
     else:
         r_t = - penalty
     return torch.from_numpy(np.array(r_t)).type(torch.FloatTensor).data
