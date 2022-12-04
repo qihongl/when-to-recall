@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch.nn.functional as F
-# from utils import to_pth
+from utils import to_sqnp, to_np, init_lll
 from task import SimpleExp2
 from models import LCALSTM as Agent
 from models import get_reward, compute_returns, compute_a2c_loss
@@ -17,10 +17,10 @@ sns.set(style='white', palette='colorblind', context='poster')
 T = 5
 B = 4
 penalty = 1
-exp = SimpleExp2(T,B)
+exp = SimpleExp2(T, B)
 
 '''init model'''
-n_hidden = 32
+n_hidden = 64
 lr = 1e-3
 cmpt = .5
 x_dim = exp.x_dim
@@ -50,6 +50,10 @@ log_loss_s = torch.zeros((n_epochs, exp.n_trios, 3))
 log_loss_a = torch.zeros((n_epochs, exp.n_trios, 3))
 log_loss_c = torch.zeros((n_epochs, exp.n_trios, 3))
 log_return = torch.zeros((n_epochs, exp.n_trios, 3))
+log_acc = init_lll(n_epochs, exp.n_trios, 3)
+log_a = init_lll(n_epochs, exp.n_trios, 3)
+
+
 for i in range(n_epochs):
     # print(f'Epoch {i}')
     # make data
@@ -69,7 +73,7 @@ for i in range(n_epochs):
                 agent.retrieval_on()
             # init loss
             loss_sup, loss_rl, returns = 0, 0, 0
-            rewards, values, probs = [], [], []
+            rewards, values, probs, accs = [], [], [], []
             for t in range(len(X[j][k])):
                 # print(f'\t\t\tt = {t}, input shape = {np.shape(X[j][k][t])}, output shape = {np.shape(Y[j][k][t])}')
                 # encode if and only if at event end
@@ -86,9 +90,12 @@ for i in range(n_epochs):
                 rewards.append(r_t)
                 values.append(v_t)
                 probs.append(pi_a_t)
-                # # sup loss
+                # sup loss
                 yhat_t = torch.squeeze(pi_a_t)[:-1]
                 loss_sup += F.mse_loss(yhat_t, Y[j][k][t])
+                # log info
+                log_acc[i][j][k].append(int(torch.argmax(yhat_t) == torch.argmax(Y[j][k][t])))
+                log_a[i][j][k].append(int(a_t))
 
             returns = compute_returns(rewards)
             loss_actor, loss_critic = compute_a2c_loss(probs, values, returns)
@@ -108,10 +115,36 @@ for i in range(n_epochs):
         agent.flush_episodic_memory()
 
     # at the end of an epoch
-    print(f'Epoch {i} | L: a: %.2f, c: %.2f | R : %.2f' % (log_loss_a[i].mean(), log_loss_c[i].mean(), log_return[i].mean()))
+    info_i = (i, log_loss_a[i].mean(), log_loss_c[i].mean(), log_return[i].mean())
+    print(f'%3d | L: a: %.2f, c: %.2f | R : %.2f' % info_i)
 
 
 '''preproc the results'''
+
+def get_within_trial_query_accuracy(log_acc):
+    wtq_acc = np.zeros((n_epochs, exp.n_trios, 2))
+    for i in range(n_epochs):
+        for j in range(exp.n_trios):
+            # get the last time point for the 1st two trios
+            wtq_acc[i,j] = [log_acc[i][j][k][-1] for k in range(2)]
+    return np.mean(wtq_acc,axis=-1)
+
+def get_test_query_acc(log_acc):
+    n_queries = 3
+    tq_acc = np.zeros((n_epochs, exp.n_trios, n_queries))
+    for i in range(n_epochs):
+        for j in range(exp.n_trios):
+            tq_acc[i,j] = log_acc[i][j][-1][exp.T - n_queries:]
+    return tq_acc
+
+def get_copy_acc(log_acc):
+    cp_acc = np.zeros((n_epochs, exp.n_trios, 2, exp.T))
+    for i in range(n_epochs):
+        for j in range(exp.n_trios):
+            for k in range(2):
+                cp_acc[i,j] = log_acc[i][j][k][:exp.T]
+    return np.mean(np.mean(cp_acc,axis=-1),axis=-1)
+
 
 '''plot the results'''
 def plot_learning_curve(title, data):
@@ -124,16 +157,15 @@ def plot_learning_curve(title, data):
     sns.despine()
     return f, ax
 
-
 plot_learning_curve('Cumulative R', log_return)
 plot_learning_curve('Loss - actor', log_loss_a)
 plot_learning_curve('Loss - critic', log_loss_c)
 
+wtq_acc = get_within_trial_query_accuracy(log_acc)
+plot_learning_curve('Within trial query acc', wtq_acc)
 
-# f, ax = plt.subplots(1,1, figsize=(8,5))
-# lc_return = [log_return[i].mean() for i in range(n_epochs)]
-# ax.plot(lc_return)
-# ax.set_xlabel('Epochs')
-# ax.set_ylabel('Cumulative R')
-# f.tight_layout()
-# sns.despine()
+tq_acc = get_test_query_acc(log_acc)
+plot_learning_curve('Test query acc', np.mean(tq_acc,axis=-1))
+
+cp_acc = get_test_query_acc(log_acc)
+plot_learning_curve('Copy acc', np.mean(cp_acc,axis=-1))

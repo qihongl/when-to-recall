@@ -26,3 +26,14 @@ def to_np(torch_tensor):
 
 def to_sqnp(torch_tensor, dtype=np.float):
     return np.array(np.squeeze(to_np(torch_tensor)), dtype=dtype)
+
+def init_ll(m, n):
+    return [[[] for _ in range(n)] for _ in range(m)]
+
+def init_lll(m, n, k):
+    return [init_ll(n, k) for _ in range(m)]
+
+
+if __name__ == "__main__":
+    lll = init_lll(4,3,2)
+    print(np.shape(lll))
