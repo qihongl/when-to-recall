@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 from scipy.stats import sem
 
@@ -26,3 +27,18 @@ def compute_stats(arr, axis=0, n_se=2, use_se=True):
 
 def moving_average(x, winsize):
     return np.convolve(x, np.ones(winsize), 'valid') / winsize
+
+
+def entropy(probs):
+    """calculate entropy.
+    I'm using log base 2!
+    Parameters
+    ----------
+    probs : a torch vector
+        a prob distribution
+    Returns
+    -------
+    torch scalar
+        the entropy of the distribution
+    """
+    return - torch.stack([pi * torch.log2(pi) for pi in probs]).sum()

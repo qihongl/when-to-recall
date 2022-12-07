@@ -63,6 +63,7 @@ class LCALSTM(nn.Module):
 
     def forward(self, x_t, hc_prev, beta=1):
         # unpack activity
+        x_t = x_t.view(1, 1, -1)
         (h_prev, c_prev) = hc_prev
         h_prev = h_prev.view(h_prev.size(1), -1)
         c_prev = c_prev.view(c_prev.size(1), -1)

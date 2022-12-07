@@ -33,21 +33,38 @@ def get_reward(a_t, x_t, y_t, penalty):
     dk_id = y_t.size()[0]
     if x_t.sum() == 1:
         query_trial = True
-    else:
+    elif x_t.sum() == 2:
         query_trial = False
+    else:
+        raise ValueError('invalid x: must be 1 hot or 2 hot vector')
 
     a_t_targ = torch.argmax(y_t)
 
     # compare action vs. target action
     if a_t == a_t_targ:
         r_t = 1
-    elif a_t == dk_id:
+    else:
         if query_trial:
-            r_t = 0
+            if a_t == dk_id:
+                r_t = 0
+            else:
+                r_t = -1
         else:
             r_t = -1
-    else:
-        r_t = - penalty
+
+    # if a_t == a_t_targ:
+    #     # r_t = 1
+    #     if query_trial:
+    #         r_t = 1
+    #     else:
+    #         r_t = 0
+    # elif a_t == dk_id:
+    #     if query_trial:
+    #         r_t = 0
+    #     else:
+    #         r_t = -1
+    # else:
+    #     r_t = - penalty
     return torch.from_numpy(np.array(r_t)).type(torch.FloatTensor).data
     # return torch.tensor(r_t).type(torch.FloatTensor).clone().detach()
 
