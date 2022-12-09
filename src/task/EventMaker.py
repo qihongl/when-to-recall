@@ -38,7 +38,7 @@ class EventMaker():
         for each epoch, we can reconstruct each trial, within each epoch, # possible events = B^(T-1)
     """
 
-    def __init__(self, T=5, B=3):
+    def __init__(self, B, T=5):
         self.T = T
         self.B = B
         self.x_dim = T + B
@@ -163,9 +163,8 @@ if __name__ == "__main__":
     sns.set(style='white', palette='colorblind', context='poster')
 
     # init
-    T = 5
     B = 3
-    em = EventMaker(T,B)
+    em = EventMaker(B)
 
     # provide the list of feature values, and the location of the shared feature
     feature_value_list = np.array([0,2,1,0,1])

@@ -21,15 +21,16 @@ eps = np.finfo(np.float32).eps.item()
 sigmoid = nn.Sigmoid()
 
 
-class LCALSTM(nn.Module):
+class LCALSTM_after(nn.Module):
 
     def __init__(
             self, input_dim, output_dim, rnn_hidden_dim, dec_hidden_dim,
-            kernel='cosine', dict_len=2, weight_init_scheme='ortho', cmpt=.8,
-            add_query_indicator=False,
+            kernel='cosine', dict_len=2, weight_init_scheme='ortho',
+            cmpt=.8, em_gate=.3, add_query_indicator=False,
     ):
-        super(LCALSTM, self).__init__()
+        super(LCALSTM_after, self).__init__()
         self.cmpt = cmpt
+        self.em_gate = em_gate
         self.add_query_indicator = add_query_indicator
         if add_query_indicator:
             self.input_dim = input_dim+1
@@ -45,7 +46,9 @@ class LCALSTM(nn.Module):
         self.actor = nn.Linear(dec_hidden_dim, output_dim)
         self.critic = nn.Linear(dec_hidden_dim, 1)
         # memory
-        self.hpc = nn.Linear(rnn_hidden_dim + dec_hidden_dim, N_SSIG)
+        self.hpc = nn.Linear(
+            rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim, N_SSIG
+        )
         self.em = EM(dict_len, rnn_hidden_dim, kernel)
         # the RL mechanism
         self.weight_init_scheme = weight_init_scheme
@@ -66,8 +69,6 @@ class LCALSTM(nn.Module):
         return (h_0_, c_0_)
 
     def forward(self, x_t, hc_prev, beta=1):
-        if self.add_query_indicator:
-            x_t = add_query_indicator(x_t)
         # unpack activity
         x_t = x_t.view(1, 1, -1)
         (h_prev, c_prev) = hc_prev
@@ -89,11 +90,13 @@ class LCALSTM(nn.Module):
         h_t = torch.mul(o_t, c_t.tanh())
         dec_act_t = F.relu(self.ih(h_t))
         # recall / encode
-        hpc_input_t = torch.cat([c_t, dec_act_t], dim=1)
-        inps_t = sigmoid(self.hpc(hpc_input_t))
+        # hpc_input_t = torch.cat([c_t, dec_act_t], dim=1)
+        # inps_t = sigmoid(self.hpc(hpc_input_t))
         # [inps_t, comp_t] = torch.squeeze(phi_t)
-        m_t = self.recall(c_t, inps_t)
-        cm_t = c_t + m_t
+        m_t = self.recall(c_t, self.em_gate)
+        hpc_input_t = torch.cat([m_t, c_t, dec_act_t], dim=1)
+        em_g_t = sigmoid(self.hpc(hpc_input_t))
+        cm_t = c_t + m_t * em_g_t
         self.encode(cm_t)
         # make final dec
         h_t = torch.mul(o_t, cm_t.tanh())
@@ -104,7 +107,7 @@ class LCALSTM(nn.Module):
         h_t = h_t.view(1, h_t.size(0), -1)
         cm_t = cm_t.view(1, cm_t.size(0), -1)
         # scache results
-        scalar_signal = [inps_t, 0, 0]
+        scalar_signal = [em_g_t, 0, 0]
         vector_signal = [f_t, i_t, o_t]
         misc = [h_t, m_t, cm_t, dec_act_t, self.em.get_vals()]
         cache = [vector_signal, scalar_signal, misc]
@@ -143,6 +146,46 @@ class LCALSTM(nn.Module):
     def encode(self, cm_t):
         if not self.em.encoding_off:
             self.em.save_memory(cm_t)
+
+    def pick_action(self, action_distribution):
+        """action selection by sampling from a multinomial.
+
+        Parameters
+        ----------
+        action_distribution : 1d torch.tensor
+            action distribution, pi(a|s)
+
+        Returns
+        -------
+        torch.tensor(int), torch.tensor(float)
+            sampled action, log_prob(sampled action)
+
+        """
+        m = Categorical(action_distribution)
+        a_t = m.sample()
+        log_prob_a_t = m.log_prob(a_t)
+        return a_t, log_prob_a_t
+
+    def init_em_config(self):
+        self.flush_episodic_memory()
+        self.encoding_off()
+        self.retrieval_off()
+
+    def flush_episodic_memory(self):
+        self.em.flush()
+
+    def encoding_off(self):
+        self.em.encoding_off = True
+
+    def retrieval_off(self):
+        self.em.retrieval_off = True
+
+    def encoding_on(self):
+        self.em.encoding_off = False
+
+    def retrieval_on(self):
+        self.em.retrieval_off = False
+
 
     def init_rvpe(self):
         self.rewards = []
@@ -243,26 +286,6 @@ class LCALSTM(nn.Module):
         a_t = m.sample()
         log_prob_a_t = m.log_prob(a_t)
         return a_t, log_prob_a_t
-
-    def init_em_config(self):
-        self.flush_episodic_memory()
-        self.encoding_off()
-        self.retrieval_off()
-
-    def flush_episodic_memory(self):
-        self.em.flush()
-
-    def encoding_off(self):
-        self.em.encoding_off = True
-
-    def retrieval_off(self):
-        self.em.retrieval_off = True
-
-    def encoding_on(self):
-        self.em.encoding_off = False
-
-    def retrieval_on(self):
-        self.em.retrieval_off = False
 
 
 def sample_random_vector(n_dim, scale=.1):

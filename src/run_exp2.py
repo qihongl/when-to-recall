@@ -6,18 +6,18 @@ import torch.nn.functional as F
 from utils import to_sqnp, to_np, init_lll
 from stats import compute_stats, entropy
 from task import SimpleExp2
+from task import get_reward
 from models import LCALSTM as Agent
-from models import get_reward, compute_returns, compute_a2c_loss
+# from models import LCALSTM_after as Agent
 # torch.autograd.set_detect_anomaly(True)
 
 sns.set(style='white', palette='colorblind', context='poster')
 
 
 '''init task'''
-T = 5
 B = 10
-penalty = 0
-exp = SimpleExp2(T, B)
+penalty = 1
+exp = SimpleExp2(B)
 
 '''init model'''
 n_hidden = 64
@@ -25,15 +25,15 @@ lr = 1e-3
 cmpt = .5
 eta = 0
 x_dim = exp.x_dim
-# x_dim = exp.x_dim + 1 # add 1 for the penalty indicator
 y_dim = exp.y_dim + 1 # add 1 for the penalty indicator
 agent = Agent(
     input_dim=x_dim, output_dim=y_dim, rnn_hidden_dim=n_hidden,
     dec_hidden_dim=n_hidden, dict_len=2, cmpt=cmpt
 )
-optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
+# optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
 optimizer_sup = torch.optim.Adam(agent.parameters(), lr=lr)
 optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr)
+criterion = torch.nn.CrossEntropyLoss()
 # scheduler_sup = torch.optim.lr_scheduler.ReduceLROnPlateau(
 #     optimizer_sup, factor=1/2, patience=30, threshold=1e-3, min_lr=1e-8,
 #     verbose=True)
@@ -55,8 +55,7 @@ log_return = torch.zeros((n_epochs, exp.n_trios, 3))
 log_acc = init_lll(n_epochs, exp.n_trios, 3)
 log_a = init_lll(n_epochs, exp.n_trios, 3)
 log_dk = init_lll(n_epochs, exp.n_trios, 3)
-
-
+# i,j,k,t=0,0,0,0
 for i in range(n_epochs):
     # print(f'Epoch {i}')
     # make data
@@ -76,11 +75,12 @@ for i in range(n_epochs):
                 agent.retrieval_on()
             # init loss
             loss_sup, loss_rl, returns = 0, 0, 0
-            rewards, values, probs, ents, accs = [], [], [], [], []
+            # rewards, values, probs, ents, accs = [], [], [], [], []
+            agent.init_rvpe()
             for t in range(len(X[j][k])):
                 # print(f'\t\t\tt = {t}, input shape = {np.shape(X[j][k][t])}, output shape = {np.shape(Y[j][k][t])}')
                 # encode if and only if at event end
-                if t == T-1:
+                if t == exp.T-1:
                     agent.encoding_on()
                 else:
                     agent.encoding_off()
@@ -88,32 +88,27 @@ for i in range(n_epochs):
                 pi_a_t, v_t, hc_t, cache_t = agent(X[j][k][t], hc_t)
                 a_t, p_a_t = agent.pick_action(pi_a_t)
                 r_t = get_reward(a_t, X[j][k][t], Y[j][k][t], penalty)
-
-                # collect results
-                rewards.append(r_t)
-                values.append(v_t)
-                probs.append(pi_a_t)
-                ents.append(entropy(pi_a_t))
+                agent.append_rvpe(r_t, v_t, pi_a_t)
                 # sup loss
                 yhat_t = pi_a_t[:-1]
                 loss_sup += F.mse_loss(yhat_t, Y[j][k][t])
+                # loss_sup += criterion(yhat_t.view(1, -1), torch.argmax(Y[j][k][t]).view(-1,))
+
                 # log info
                 log_acc[i][j][k].append(int(torch.argmax(yhat_t) == torch.argmax(Y[j][k][t])))
                 log_a[i][j][k].append(int(a_t))
                 log_dk[i][j][k].append(int(a_t) == exp.B)
 
-            returns = compute_returns(rewards, normalize=True)
-            loss_actor, loss_critic = compute_a2c_loss(probs, values, returns)
-            pi_ent = torch.stack(ents).sum()
-
-            loss_rl = loss_actor + loss_critic - pi_ent * eta
             # at the end of one event
+            loss_actor, loss_critic, pi_ent = agent.compute_a2c_loss(gamma=0, normalize=True, use_V=True)
 
+            # update weights
             if i < sup_epoch:
                 optimizer_sup.zero_grad()
                 loss_sup.backward()
                 optimizer_sup.step()
             else:
+                loss_rl = loss_actor + loss_critic - pi_ent * eta
                 optimizer_rl.zero_grad()
                 loss_rl.backward()
                 optimizer_rl.step()
@@ -121,7 +116,7 @@ for i in range(n_epochs):
             # log info
             log_loss_s[i,j,k] = loss_sup
             log_loss_a[i,j,k], log_loss_c[i,j,k] = loss_actor, loss_critic
-            log_return[i,j,k] = torch.stack(rewards).sum()
+            log_return[i,j,k] = torch.stack(agent.rewards).sum()
 
         # at the end of 3 trio
         agent.flush_episodic_memory()
@@ -146,7 +141,7 @@ def get_test_query_acc(log_acc):
     tq_acc = np.zeros((n_epochs, exp.n_trios, n_queries))
     for i in range(n_epochs):
         for j in range(exp.n_trios):
-            tq_acc[i,j] = log_acc[i][j][-1][exp.T - n_queries:]
+            tq_acc[i,j] = [log_acc[i][j][-1][ii] for ii in [2,4,6]]
     return tq_acc
 
 def get_copy_acc(log_acc):
@@ -204,3 +199,13 @@ ax.legend()
 cp_dk = get_copy_acc(log_dk)
 f, ax = plot_learning_curve('Copy, p(dk)', np.mean(cp_dk,axis=-1))
 ax.legend()
+
+# i = 2999
+#
+# for j in range(exp.n_trios):
+#     # get info during test
+#     a_test_j = log_a[i][j][-1]
+#     dk_test_j = log_dk[i][j][-1]
+#     acc_test_j = log_acc[i][j][-1]
+#     trial_type_j = log_trial_types[i][j]
+#     print(dk_test_j)

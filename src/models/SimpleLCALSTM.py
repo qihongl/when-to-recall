@@ -1,13 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 import pdb
-from stats import entropy
 from models.EM import EM
 from torch.distributions import Categorical
 from models.initializer import initialize_weights
-from torch.nn.functional import smooth_l1_loss
 
 # constants
 # number of vector signal (lstm gates)
@@ -17,7 +14,6 @@ N_SSIG = 1
 # the ordering in the cache
 scalar_signal_names = ['input strength']
 vector_signal_names = ['f', 'i', 'o']
-eps = np.finfo(np.float32).eps.item()
 sigmoid = nn.Sigmoid()
 
 
@@ -26,26 +22,22 @@ class LCALSTM(nn.Module):
     def __init__(
             self, input_dim, output_dim, rnn_hidden_dim, dec_hidden_dim,
             kernel='cosine', dict_len=2, weight_init_scheme='ortho', cmpt=.8,
-            add_query_indicator=False,
+            # add_penalty_dim=True
     ):
         super(LCALSTM, self).__init__()
         self.cmpt = cmpt
-        self.add_query_indicator = add_query_indicator
-        if add_query_indicator:
-            self.input_dim = input_dim+1
-        else:
-            self.input_dim = input_dim
+        self.input_dim = input_dim
         self.rnn_hidden_dim = rnn_hidden_dim
         self.n_hidden_total = (N_VSIG + 1) * rnn_hidden_dim + N_SSIG
         # rnn module
         self.i2h = nn.Linear(self.input_dim, self.n_hidden_total)
         self.h2h = nn.Linear(rnn_hidden_dim, self.n_hidden_total)
         # deicion module
-        self.ih = nn.Linear(rnn_hidden_dim, dec_hidden_dim)
-        self.actor = nn.Linear(dec_hidden_dim, output_dim)
-        self.critic = nn.Linear(dec_hidden_dim, 1)
+        # self.ih = nn.Linear(rnn_hidden_dim, dec_hidden_dim)
+        self.actor = nn.Linear(rnn_hidden_dim, output_dim)
+        self.critic = nn.Linear(rnn_hidden_dim, 1)
         # memory
-        self.hpc = nn.Linear(rnn_hidden_dim + dec_hidden_dim, N_SSIG)
+        self.hpc = nn.Linear(rnn_hidden_dim, N_SSIG)
         self.em = EM(dict_len, rnn_hidden_dim, kernel)
         # the RL mechanism
         self.weight_init_scheme = weight_init_scheme
@@ -60,14 +52,13 @@ class LCALSTM(nn.Module):
         # init params
         initialize_weights(self, self.weight_init_scheme)
 
+
     def get_init_states(self, scale=.1, device='cpu'):
         h_0_ = sample_random_vector(self.rnn_hidden_dim, scale)
         c_0_ = sample_random_vector(self.rnn_hidden_dim, scale)
         return (h_0_, c_0_)
 
     def forward(self, x_t, hc_prev, beta=1):
-        if self.add_query_indicator:
-            x_t = add_query_indicator(x_t)
         # unpack activity
         x_t = x_t.view(1, 1, -1)
         (h_prev, c_prev) = hc_prev
@@ -87,9 +78,9 @@ class LCALSTM(nn.Module):
         c_t = torch.mul(c_prev, f_t) + torch.mul(i_t, c_t_new)
         # make 1st decision attempt
         h_t = torch.mul(o_t, c_t.tanh())
-        dec_act_t = F.relu(self.ih(h_t))
+        # dec_act_t = F.relu(self.ih(h_t))
         # recall / encode
-        hpc_input_t = torch.cat([c_t, dec_act_t], dim=1)
+        hpc_input_t = c_t
         inps_t = sigmoid(self.hpc(hpc_input_t))
         # [inps_t, comp_t] = torch.squeeze(phi_t)
         m_t = self.recall(c_t, inps_t)
@@ -97,16 +88,16 @@ class LCALSTM(nn.Module):
         self.encode(cm_t)
         # make final dec
         h_t = torch.mul(o_t, cm_t.tanh())
-        dec_act_t = F.relu(self.ih(h_t))
-        pi_a_t = _softmax(self.actor(dec_act_t), beta)
-        value_t = self.critic(dec_act_t)
+        # dec_act_t = F.relu(self.ih(h_t))
+        pi_a_t = _softmax(self.actor(h_t), beta)
+        value_t = self.critic(h_t)
         # reshape data
         h_t = h_t.view(1, h_t.size(0), -1)
         cm_t = cm_t.view(1, cm_t.size(0), -1)
         # scache results
         scalar_signal = [inps_t, 0, 0]
         vector_signal = [f_t, i_t, o_t]
-        misc = [h_t, m_t, cm_t, dec_act_t, self.em.get_vals()]
+        misc = [h_t, m_t, cm_t, _, self.em.get_vals()]
         cache = [vector_signal, scalar_signal, misc]
         return pi_a_t, value_t, (h_t, cm_t), cache
 
@@ -143,87 +134,6 @@ class LCALSTM(nn.Module):
     def encode(self, cm_t):
         if not self.em.encoding_off:
             self.em.save_memory(cm_t)
-
-    def init_rvpe(self):
-        self.rewards = []
-        self.values = []
-        self.probs = []
-        self.ents = []
-
-    def append_rvpe(self, r_t, v_t, pi_a_t):
-        self.rewards.append(r_t)
-        self.values.append(v_t)
-        self.probs.append(pi_a_t)
-        self.ents.append(entropy(pi_a_t))
-
-    def compute_returns(self, gamma=0, normalize=False):
-        """compute return in the standard policy gradient setting.
-
-        Parameters
-        ----------
-        rewards : list, 1d array
-            immediate reward at time t, for all t
-        gamma : float, [0,1]
-            temporal discount factor
-        normalize : bool
-            whether to normalize the return
-            - default to false, because we care about absolute scales
-
-        Returns
-        -------
-        1d torch.tensor
-            the sequence of cumulative return
-
-        """
-        # compute cumulative discounted reward since t, for all t
-        R = 0
-        returns = []
-        for r in self.rewards[::-1]:
-            R = r + gamma * R
-            returns.insert(0, R)
-        returns = torch.tensor(returns)
-        # normalize w.r.t to the statistics of this trajectory
-        if normalize:
-            returns = (returns - returns.mean()) / (returns.std() + eps)
-        return returns
-
-
-    def compute_a2c_loss(self, gamma=0, normalize=False, use_V=True):
-        """compute the objective node for policy/value networks
-
-        Parameters
-        ----------
-        probs : list
-            action prob at time t
-        values : list
-            state value at time t
-        returns : list
-            return at time t
-
-        Returns
-        -------
-        torch.tensor, torch.tensor
-            Description of returned object.
-
-        """
-        returns = self.compute_returns(gamma=gamma, normalize=normalize)
-        policy_grads, value_losses = [], []
-        for prob_t, v_t, R_t in zip(self.probs, self.values, returns):
-            if use_V:
-                A_t = R_t - v_t.item()
-                value_losses.append(smooth_l1_loss(torch.squeeze(v_t), torch.squeeze(R_t)))
-            else:
-                A_t = R_t
-                value_losses.append(torch.FloatTensor(0).data)
-            # accumulate policy gradient
-            policy_grads.append(-prob_t * A_t)
-        policy_gradient = torch.stack(policy_grads).sum()
-        value_loss = torch.stack(value_losses).sum()
-        pi_ent = torch.stack(self.ents).sum()
-        # if return_all:
-        return policy_gradient, value_loss, pi_ent
-        # return loss_actor + loss_critic - pi_ent * eta
-
 
     def pick_action(self, action_distribution):
         """action selection by sampling from a multinomial.
