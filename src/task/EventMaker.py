@@ -1,6 +1,6 @@
 import numpy as np
 from copy import deepcopy
-from utils import onehot
+from utils.utils import onehot
 
 ''' doc
 Make an event, which is a sequence of feature vectors

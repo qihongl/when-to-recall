@@ -3,7 +3,7 @@ import numpy as np
 
 from task.EventMaker import EventMaker
 from copy import deepcopy
-from utils import list_to_pth
+from utils.utils import list_to_pth
 
 t_query_test = [2,4,6]
 t_query_feedback = [3,5,7]

@@ -4,30 +4,46 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch.nn.functional as F
-from utils import to_sqnp, to_np, init_lll
-from stats import compute_stats, entropy
 from task import SimpleExp2
 from task import get_reward
 from models import LCALSTM as Agent
+from utils import Parameters as P
+from utils.utils import to_sqnp, to_np, init_lll
+from utils.stats import compute_stats, entropy
 # from models import LCALSTM_after as Agent
 # torch.autograd.set_detect_anomaly(True)
 
 sns.set(style='white', palette='colorblind', context='poster')
 log_root = '../log'
 
-'''init task'''
+'''init params'''
+# env param
 B = 10
-penalty = 1
-exp = SimpleExp2(B)
-
-'''init model'''
+penalty = 4
+# model param
+add_query_indicator = True
+gating_type = 'pre'
 n_hidden = 128
 lr = 1e-3
 cmpt = .5
-eta = 0
+eta = 0.1
+# training param
+n_epochs = 4000
+sup_epoch = 2000
+test_mode = True
+# save all params
+p = P(
+    B = B, penalty = penalty, n_hidden = n_hidden, lr = lr, cmpt = cmpt,
+    eta = eta, test_mode = test_mode, add_query_indicator = add_query_indicator,
+    gating_type = gating_type, n_epochs = n_epochs, sup_epoch = sup_epoch
+)
+p.gen_log_dirs()
+
+'''init model and task'''
+exp = SimpleExp2(B)
+
 x_dim = exp.x_dim
 y_dim = exp.y_dim + 1 # add 1 for the don't know unit
-add_query_indicator = True
 agent = Agent(
     input_dim=x_dim, output_dim=y_dim, rnn_hidden_dim=n_hidden,
     dec_hidden_dim=n_hidden//2, dict_len=2, cmpt=cmpt,
@@ -37,17 +53,8 @@ agent = Agent(
 optimizer_sup = torch.optim.Adam(agent.parameters(), lr=lr)
 optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr)
 # criterion = torch.nn.CrossEntropyLoss()
-# scheduler_sup = torch.optim.lr_scheduler.ReduceLROnPlateau(
-#     optimizer_sup, factor=1/2, patience=30, threshold=1e-3, min_lr=1e-8,
-#     verbose=True)
-# scheduler_rl = torch.optim.lr_scheduler.ReduceLROnPlateau(
-#     optimizer_rl, factor=1/2, patience=30, threshold=1e-3, min_lr=1e-8,
-#     verbose=True)
-
 
 '''train the model'''
-n_epochs = 4000
-sup_epoch = 2000
 log_sf_ids = np.zeros((n_epochs, exp.n_trios))
 log_trial_types = [None] * n_epochs
 log_loss_s = torch.zeros((n_epochs, exp.n_trios, 3))
@@ -59,16 +66,12 @@ log_a = init_lll(n_epochs, exp.n_trios, 3)
 log_dk = init_lll(n_epochs, exp.n_trios, 3)
 # i,j,k,t=0,0,0,0
 for i in range(n_epochs):
-    # print(f'Epoch {i}')
     # make data
     X, Y, log_sf_ids[i], log_trial_types[i] = exp.make_data(test_mode=True, to_torch=True)
     permuted_tiro_ids = np.random.permutation(exp.n_trios)
     for j in permuted_tiro_ids:
-        # print(f'\tTrio {j}')
         # go through the trio: event 1 (study) -> event 1' (study) -> event 1 (test)
-        # for k in range(len(exp.stimuli_order)-1):
         for k in range(len(exp.stimuli_order)):
-            # print(f'\t\tk = {k} - {exp.stimuli_order[k]}')
             # at the beginning of each event, flush WM
             hc_t = agent.get_init_states()
             # turn off recall during the study phase, turn it on during test
@@ -80,7 +83,6 @@ for i in range(n_epochs):
             loss_sup, loss_rl, returns = 0, 0, 0
             agent.init_rvpe()
             for t in range(len(X[j][k])):
-                # print(f'\t\t\tt = {t}, input shape = {np.shape(X[j][k][t])}, output shape = {np.shape(Y[j][k][t])}')
                 # encode if and only if at event end
                 if t == exp.T-1 and k in [0, 1]:
                     agent.encoding_on()
@@ -101,7 +103,7 @@ for i in range(n_epochs):
                 log_dk[i][j][k].append(int(a_t) == exp.B)
 
             # at the end of one event
-            loss_actor, loss_critic, pi_ent = agent.compute_a2c_loss(gamma=.5, normalize=True, use_V=True)
+            loss_actor, loss_critic, pi_ent = agent.compute_a2c_loss(gamma=0, normalize=True, use_V=True)
 
             # update weights
             if i < sup_epoch:
@@ -109,7 +111,6 @@ for i in range(n_epochs):
                 loss_sup.backward()
                 optimizer_sup.step()
             else:
-                # loss_rl = loss_actor + loss_critic - pi_ent * eta
                 loss_rl = loss_actor + loss_critic - pi_ent * eta
                 optimizer_rl.zero_grad()
                 loss_rl.backward()
@@ -126,6 +127,10 @@ for i in range(n_epochs):
     # at the end of an epoch
     info_i = (i, log_loss_a[i].mean(), log_loss_c[i].mean(), log_return[i].mean())
     print(f'%3d | L: a: %.2f, c: %.2f | R : %.2f' % info_i)
+
+# save weights
+log_path = os.path.join(log_root, p.gen_log_dirs())
+save_ckpt(n_epochs, log_path, agent, optimizer_rl)
 
 
 '''preproc the results'''
@@ -240,7 +245,3 @@ for ax in axes:
 f.legend(['high d', 'low d'], loc=(.2,.25))
 sns.despine()
 f.tight_layout()
-
-
-# log_path = os.path.join(log_root, 'temp')
-# save_ckpt(n_epochs, log_path, agent, optimizer_rl)
