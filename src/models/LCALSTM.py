@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import pdb
-from stats import entropy
 from models.EM import EM
+from task import add_query_indicator
 from torch.distributions import Categorical
 from models.initializer import initialize_weights
 from torch.nn.functional import smooth_l1_loss
@@ -150,11 +150,11 @@ class LCALSTM(nn.Module):
         self.probs = []
         self.ents = []
 
-    def append_rvpe(self, r_t, v_t, pi_a_t):
+    def append_rvpe(self, r_t, v_t, p_a_t, ent_t):
         self.rewards.append(r_t)
         self.values.append(v_t)
-        self.probs.append(pi_a_t)
-        self.ents.append(entropy(pi_a_t))
+        self.probs.append(p_a_t)
+        self.ents.append(ent_t)
 
     def compute_returns(self, gamma=0, normalize=False):
         """compute return in the standard policy gradient setting.
@@ -164,7 +164,7 @@ class LCALSTM(nn.Module):
         rewards : list, 1d array
             immediate reward at time t, for all t
         gamma : float, [0,1]
-            temporal discount factor
+            temporal discount factor, set to zero to get the actual r_t
         normalize : bool
             whether to normalize the return
             - default to false, because we care about absolute scales
@@ -173,7 +173,6 @@ class LCALSTM(nn.Module):
         -------
         1d torch.tensor
             the sequence of cumulative return
-
         """
         # compute cumulative discounted reward since t, for all t
         R = 0
@@ -204,6 +203,8 @@ class LCALSTM(nn.Module):
         -------
         torch.tensor, torch.tensor
             Description of returned object.
+
+        min sum (-pi (R_t-v_t))
 
         """
         returns = self.compute_returns(gamma=gamma, normalize=normalize)

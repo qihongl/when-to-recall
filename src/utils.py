@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 
+CKPT_FTEMP = 'ckpt-ep-%d.pt'
+
 def onehot(n, k):
     '''
     return a n-D one hot vector and the k-th entry is 1
@@ -33,6 +35,35 @@ def init_ll(m, n):
 def init_lll(m, n, k):
     return [init_ll(n, k) for _ in range(m)]
 
+
+def save_ckpt(cur_epoch, log_path, agent, optimizer):
+    # compute fname
+    ckpt_fname = CKPT_FTEMP % cur_epoch
+    log_fpath = os.path.join(log_path, ckpt_fname)
+    torch.save({
+        'network_state_dict': agent.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+    }, log_fpath)
+
+
+def load_ckpt(epoch_load, log_path, agent, optimizer=None):
+    # compute fname
+    ckpt_fname = CKPT_FTEMP % epoch_load
+    log_fpath = os.path.join(log_path, ckpt_fname)
+    if os.path.exists(log_fpath):
+        # load the ckpt back
+        checkpoint = torch.load(log_fpath)
+        # unpack results
+        agent.load_state_dict(checkpoint['network_state_dict'])
+        if optimizer is None:
+            optimizer = torch.optim.Adam(agent.parameters())
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        agent.train()
+        # msg
+        print(f'network weights - epoch {epoch_load} loaded')
+        return agent, optimizer
+    print('ERROR: ckpt DNE')
+    return None, None
 
 if __name__ == "__main__":
     lll = init_lll(4,3,2)

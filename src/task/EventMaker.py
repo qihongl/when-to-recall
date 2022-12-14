@@ -87,12 +87,11 @@ class EventMaker():
         lure = self.make_event(lure_feature_value_list)
         return targ, lure
 
-    def make_low_d_stimuli(self, feature_value_list, shared_feature_id):
+    def make_low_d_test(self, targ_study, lure_study, shared_feature_id):
         '''
         For a low diagnosticity trial (where the diagnostic feature comes at position 3)
         The second observation is always a shared feature.
         '''
-        targ_study, lure_study = self.make_targ_lure(feature_value_list, shared_feature_id)
         # make the test trial
         targ_test = np.zeros_like(targ_study)
         # the 1st feature is always the event label
@@ -104,15 +103,13 @@ class EventMaker():
         rest_feature_ids_perm = np.random.permutation(list(rest_feature_ids))
         for i in range(2, self.T):
             targ_test[i,:] = targ_study[rest_feature_ids_perm[i-2],:]
-        return targ_study, lure_study, targ_test
+        return targ_test
 
-    def make_high_d_stimuli(self, feature_value_list, shared_feature_id):
+    def make_high_d_test(self, targ_study, lure_study, shared_feature_id):
         '''
         For a low diagnosticity trial (where the diagnostic feature comes at position 3)
-        The second observation is always a shared feature.
+        The last observation is always a shared feature.
         '''
-        # shared_feature_id_test = -1
-        targ_study, lure_study = self.make_targ_lure(feature_value_list, shared_feature_id)
         # make the test trial
         targ_test = np.zeros_like(targ_study)
         # the 1st feature is always the event label
@@ -124,14 +121,21 @@ class EventMaker():
         rest_feature_ids_perm = np.random.permutation(list(rest_feature_ids))
         for i in range(1, self.T-1):
             targ_test[i,:] = targ_study[rest_feature_ids_perm[i-1],:]
-        return targ_study, lure_study, targ_test
+        return targ_test
 
 
-    def make_stimuli(self, feature_value_list, shared_feature_id, trial_type):
+    def make_stimuli(self, feature_value_list, shared_feature_id, trial_type, n_tests=1):
         assert trial_type in ['low d', 'high d']
+        assert n_tests >= 1
+        targ_study, lure_study = self.make_targ_lure(feature_value_list, shared_feature_id)
         if trial_type == 'low d':
-            return self.make_low_d_stimuli(feature_value_list, shared_feature_id)
-        return self.make_high_d_stimuli(feature_value_list, shared_feature_id)
+            targ_test = self.make_low_d_test(targ_study, lure_study, shared_feature_id)
+        else:
+            if n_tests == 1:
+                targ_test = self.make_high_d_test(targ_study, lure_study, shared_feature_id)
+            else:
+                targ_test = [self.make_high_d_test(targ_study, lure_study, shared_feature_id) for _ in range(n_tests)]
+        return targ_study, lure_study, targ_test
 
 
     def feature_vec_to_ints(self, feature_vector):
@@ -151,7 +155,6 @@ class EventMaker():
         assert len(feature_vectors.shape) == 2
         return np.array([feature_vec_to_ints(fv) for fv in feature_vectors])
 
-# def imshow_stimuli(targ_study, lure_study, targ_test):
 
 
 if __name__ == "__main__":
@@ -191,13 +194,13 @@ if __name__ == "__main__":
         axes[2].set_title('targ, test')
         axes[2].set_ylabel('time')
         for ax in axes:
-            ax.axvline(T-.5, color='grey', linestyle='--')
+            ax.axvline(em.T-.5, color='grey', linestyle='--')
         # mark the location of the shared feature
-        rect = patches.Rectangle((0-.5, shared_feature_id-.5), T+B, 1, linewidth=3, edgecolor='red', facecolor='none')
+        rect = patches.Rectangle((0-.5, shared_feature_id-.5), em.x_dim, 1, linewidth=3, edgecolor='red', facecolor='none')
         axes[0].add_patch(rect)
-        rect = patches.Rectangle((0-.5, shared_feature_id-.5), T+B, 1, linewidth=3, edgecolor='red', facecolor='none')
+        rect = patches.Rectangle((0-.5, shared_feature_id-.5), em.x_dim, 1, linewidth=3, edgecolor='red', facecolor='none')
         axes[1].add_patch(rect)
-        rect = patches.Rectangle((0-.5, em.loc_sf_test[trial_type]-.5), T+B, 1, linewidth=3, edgecolor='red', facecolor='none')
+        rect = patches.Rectangle((0-.5, em.loc_sf_test[trial_type]-.5), em.x_dim, 1, linewidth=3, edgecolor='red', facecolor='none')
         axes[2].add_patch(rect)
         f.tight_layout()
 

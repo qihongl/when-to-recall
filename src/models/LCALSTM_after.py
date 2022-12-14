@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import pdb
-from stats import entropy
 from models.EM import EM
+from task import add_query_indicator
 from torch.distributions import Categorical
 from models.initializer import initialize_weights
 from torch.nn.functional import smooth_l1_loss
@@ -186,18 +186,17 @@ class LCALSTM_after(nn.Module):
     def retrieval_on(self):
         self.em.retrieval_off = False
 
-
     def init_rvpe(self):
         self.rewards = []
         self.values = []
         self.probs = []
         self.ents = []
 
-    def append_rvpe(self, r_t, v_t, pi_a_t):
+    def append_rvpe(self, r_t, v_t, p_a_t, ent_t):
         self.rewards.append(r_t)
         self.values.append(v_t)
-        self.probs.append(pi_a_t)
-        self.ents.append(entropy(pi_a_t))
+        self.probs.append(p_a_t)
+        self.ents.append(ent_t)
 
     def compute_returns(self, gamma=0, normalize=False):
         """compute return in the standard policy gradient setting.
