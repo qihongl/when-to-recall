@@ -40,7 +40,7 @@ class Parameters():
         self.gating_type = gating_type
         self.n_epochs = n_epochs
         self.sup_epoch = sup_epoch
-        self.log_dirs = f'B-{B}/gating-{gating_type}/task-unit-{int(add_query_indicator)}/train-mode-{int(test_mode)}/penalty-{penalty}/n_hidden-{n_hidden}-lr-{lr}/n_epochs-{n_epochs}-sup_epoch-{sup_epoch}/'
+        self.log_dirs = f'B-{B}/n_hidden-{n_hidden}-lr-{lr}/gating-{gating_type}/task-unit-{int(add_query_indicator)}/penalty-{penalty}/train-mode-{int(test_mode)}-n_epochs-{n_epochs}-sup_epoch-{sup_epoch}/'
 
     def gen_log_dirs(self, verbose=False):
         fpath = os.path.join(LOG_ROOT, self.log_dirs)
