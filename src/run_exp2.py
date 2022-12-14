@@ -8,13 +8,12 @@ from task import SimpleExp2
 from task import get_reward
 from models import LCALSTM as Agent
 from utils import Parameters as P
-from utils.utils import to_sqnp, to_np, init_lll
+from utils.utils import to_sqnp, to_np, init_lll, save_ckpt
 from utils.stats import compute_stats, entropy
 # from models import LCALSTM_after as Agent
 # torch.autograd.set_detect_anomaly(True)
 
 sns.set(style='white', palette='colorblind', context='poster')
-log_root = '../log'
 
 '''init params'''
 # env param
@@ -37,7 +36,6 @@ p = P(
     eta = eta, test_mode = test_mode, add_query_indicator = add_query_indicator,
     gating_type = gating_type, n_epochs = n_epochs, sup_epoch = sup_epoch
 )
-p.gen_log_dirs()
 
 '''init model and task'''
 exp = SimpleExp2(B)
@@ -129,8 +127,7 @@ for i in range(n_epochs):
     print(f'%3d | L: a: %.2f, c: %.2f | R : %.2f' % info_i)
 
 # save weights
-log_path = os.path.join(log_root, p.gen_log_dirs())
-save_ckpt(n_epochs, log_path, agent, optimizer_rl)
+save_ckpt(n_epochs, p.gen_log_dirs(), agent, optimizer_rl)
 
 
 '''preproc the results'''
