@@ -97,51 +97,7 @@ class SimpleExp2():
             targ_test_ins = np.insert(targ_test_ins, insert_id, targ_test[i,:], axis=0)
         return targ_test_ins
 
-
-    # def make_data(self, p=.5, n_tests=1, to_torch=False):
-    #     """
-    #     return a # events types (B) x |{targ, lure, targ_test}| x T x x_dim array
-    #     plan:
-    #         for each epoch, loop over all B events
-    #             for each trial, the model sees targ, lure and then targ_test
-    #                 then loop over time T
-    #     """
-    #     X, Y = [], []
-    #     shared_feature_ids = [None] * self.B
-    #     trial_types = [None] * self.B
-    #     for event_label in range(self.B):
-    #         feature_value_list = [event_label] + list(self.sample_feature_values())
-    #         shared_feature_ids[event_label] = self.sample_shared_feature_loc()
-    #         trial_types[event_label] = self.sample_trial_type(p)
-    #         # make the target and lure for the study phase events  + the test target events
-    #         targ_study, lure_study, targ_test = self.em.make_stimuli(
-    #             feature_value_list, shared_feature_ids[event_label],
-    #             trial_types[event_label], n_tests
-    #         )
-    #         # add within trial queries for the two study phase events
-    #         targ_study, targ_query_id = self.add_within_trial_query(targ_study, shared_feature_ids[event_label])
-    #         lure_study, lure_query_id = self.add_within_trial_query(lure_study, shared_feature_ids[event_label])
-    #         # dup query time points (to provide feedback)
-    #         targ_test = self.dup_query_timepoints(targ_test)
-    #         # form Y here (before the fillers part of X are masked)
-    #         Y.append([self.to_y(targ_study), self.to_y(lure_study), self.to_y(targ_test)])
-    #         # remove filler values for the prediction features
-    #         targ_study = self.mask_out_within_trial_query_fillers(targ_study)
-    #         lure_study = self.mask_out_within_trial_query_fillers(lure_study)
-    #         targ_test = self.mask_out_query_fillers(targ_test)
-    #         # pack data
-    #         X.append([targ_study, lure_study, targ_test])
-    #     # see target -> lure -> test; since WM is flushed between events, order doesn't matter
-    #     self.stimuli_order = ['targ', 'lure', 'test']
-    #     # type conversion
-    #     if to_torch:
-    #         for j in range(self.B):
-    #             X[j] = list_to_pth(X[j])
-    #             Y[j] = list_to_pth(Y[j])
-    #     return X, Y, shared_feature_ids, trial_types
-
-
-    def make_data(self, p=.5, n_tests=1, test_mode=True, to_torch=False):
+    def make_data(self, p=.5, n_tests=1, test_mode=True, high_d_only=False, to_torch=False):
         """
         return a # events types (B) x |{targ, lure, targ_test}| x T x x_dim array
         plan:
@@ -153,9 +109,13 @@ class SimpleExp2():
         shared_feature_ids = [None] * self.B
         trial_types = [None] * self.B
         for event_label in range(self.B):
+            # sample experiment info
             feature_value_list = [event_label] + list(self.sample_feature_values())
             shared_feature_ids[event_label] = self.sample_shared_feature_loc()
-            trial_types[event_label] = self.sample_trial_type(p)
+            if high_d_only:
+                trial_types[event_label] = 'high d'
+            else:
+                trial_types[event_label] = self.sample_trial_type(p)
             # make the target and lure for the study phase events  + the test target events
             targ_study, lure_study, targ_test = self.em.make_stimuli(
                 feature_value_list, shared_feature_ids[event_label],

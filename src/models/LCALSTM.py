@@ -187,7 +187,7 @@ class LCALSTM(nn.Module):
         return returns
 
 
-    def compute_a2c_loss(self, gamma=0, normalize=False, use_V=True):
+    def compute_a2c_loss(self, gamma=0, normalize=True, use_V=True):
         """compute the objective node for policy/value networks
 
         Parameters

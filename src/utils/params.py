@@ -28,7 +28,7 @@ class Parameters():
         assert type(add_query_indicator) == type(True)
         assert type(test_mode) == type(True)
         assert gating_type in GATING_TYPES
-        assert n_epochs > sup_epoch > 0
+        assert n_epochs >= sup_epoch >= 0
         self.B = B
         self.penalty = penalty
         self.n_hidden = n_hidden

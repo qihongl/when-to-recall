@@ -1,4 +1,4 @@
-import os 
+import os
 import torch
 import numpy as np
 
@@ -37,7 +37,7 @@ def init_lll(m, n, k):
     return [init_ll(n, k) for _ in range(m)]
 
 
-def save_ckpt(cur_epoch, log_path, agent, optimizer):
+def save_ckpt(cur_epoch, log_path, agent, optimizer, verbose=False):
     # compute fname
     ckpt_fname = CKPT_FTEMP % cur_epoch
     log_fpath = os.path.join(log_path, ckpt_fname)
@@ -45,6 +45,9 @@ def save_ckpt(cur_epoch, log_path, agent, optimizer):
         'network_state_dict': agent.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
     }, log_fpath)
+    if verbose:
+        print(f'model saved at epoch {cur_epoch}')
+
 
 
 def load_ckpt(epoch_load, log_path, agent, optimizer=None):
