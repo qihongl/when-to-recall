@@ -3,6 +3,7 @@ import os
 LOG_ROOT = '../log'
 GATING_TYPES = ['pre', 'post']
 
+
 class Parameters():
 
     def __init__(
@@ -17,7 +18,8 @@ class Parameters():
         add_query_indicator = True,
         gating_type = 'pre',
         n_epochs = 4000,
-        sup_epoch = 2000
+        sup_epoch = 2000,
+        verbose=True,
     ):
         assert B >= 2
         assert penalty >= 0
@@ -40,12 +42,19 @@ class Parameters():
         self.gating_type = gating_type
         self.n_epochs = n_epochs
         self.sup_epoch = sup_epoch
-        self.log_dirs = f'B-{B}/n_hidden-{n_hidden}-lr-{lr}/gating-{gating_type}/task-unit-{int(add_query_indicator)}/penalty-{penalty}/train-mode-{int(test_mode)}-n_epochs-{n_epochs}-sup_epoch-{sup_epoch}/'
+        sub_dirs = f'B-{B}/n_hidden-{n_hidden}-lr-{lr}/gating-{gating_type}/task-unit-{int(add_query_indicator)}/penalty-{penalty}/train-mode-{int(test_mode)}-n_epochs-{n_epochs}-sup_epoch-{sup_epoch}/'
+        self.log_dir = os.path.join(LOG_ROOT, sub_dirs)
+        self.gen_log_dirs(verbose=verbose)
 
     def gen_log_dirs(self, verbose=False):
-        fpath = os.path.join(LOG_ROOT, self.log_dirs)
-        mkdir_ifdne(fpath, verbose)
-        return fpath
+        mkdir_ifdne(self.log_dir, verbose)
+        return self.log_dir
+
+    def log_dir_exists(self):
+        if os.path.exists(self.log_dir):
+            return True
+        return False
+
 
 def mkdir_ifdne(dir_name, verbose=False):
     if not os.path.exists(dir_name):

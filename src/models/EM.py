@@ -97,10 +97,9 @@ class EM():
         """
         # if no memory, return the zero vector
         if len(self.vals) == 0 or self.retrieval_off:
-            return dummy_memory(self.dim)
-        return self._get_memory(
-            input_pattern, leak=leak, comp=comp, w_input=w_input
-        )
+            return dummy_memory(self.dim), None
+        m_t, w = self._get_memory(input_pattern, leak=leak, comp=comp, w_input=w_input)
+        return m_t, w
 
     # @torch.no_grad()
     def _get_memory(
@@ -128,7 +127,7 @@ class EM():
         ).view(1, -1)
         # compute the memory matrix
         M = torch.stack(self.vals)
-        return w @ M
+        return w @ M, w
 
     def get_vals(self):
         return deepcopy(self.vals)

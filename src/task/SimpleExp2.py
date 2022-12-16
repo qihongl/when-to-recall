@@ -22,6 +22,7 @@ class SimpleExp2():
         self.n_trios = B
         self.loc_sf_test = {'low d': 1, 'high d': 6}
         self.t_wtq = {'train': np.arange(0, self.T * 2, 2), 'test' : np.array([-1])}
+        self.T_test = self.T + self.T - 2 # time points during test 
 
     def sample_feature_values(self):
         return np.random.choice(range(0, self.B), size=(self.T-1,))
@@ -243,7 +244,7 @@ if __name__ == "__main__":
 
     '''how to init'''
     B = 4
-    test_mode = 0
+    test_mode = 1
     exp = SimpleExp2(B)
 
     '''core func'''

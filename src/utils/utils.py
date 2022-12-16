@@ -1,4 +1,5 @@
 import os
+import glob
 import torch
 import numpy as np
 
@@ -48,8 +49,6 @@ def save_ckpt(cur_epoch, log_path, agent, optimizer, verbose=False):
     if verbose:
         print(f'model saved at epoch {cur_epoch}')
 
-
-
 def load_ckpt(epoch_load, log_path, agent, optimizer=None):
     # compute fname
     ckpt_fname = CKPT_FTEMP % epoch_load
@@ -68,6 +67,41 @@ def load_ckpt(epoch_load, log_path, agent, optimizer=None):
         return agent, optimizer
     print('ERROR: ckpt DNE')
     return None, None
+
+
+def get_recall_info(cache):
+    # full ver
+    [vector_signal, scalar_signal, misc] = cache
+    # [h_t, m_t, cm_t, dec_act_t, mems, ma_t] = misc
+    # [f_t, i_t, o_t] = vector_signal
+    # [inps, _, _]= scalar_signal
+    [_, _, _, _, _, ma_t] = misc
+    [emg_t, _, _]= scalar_signal
+    return emg_t, ma_t
+
+def list_fnames(data_dir, fpattern):
+    '''
+    list all fnames/fpaths with a particular fpattern (e.g. *pca.pkl)
+    '''
+    fpaths = glob.glob(os.path.join(data_dir, fpattern))
+    n_data_files = len(fpaths)
+    fnames = [None] * n_data_files
+    for i, fpath in enumerate(fpaths):
+        # get file info
+        fnames[i] = os.path.basename(fpath)
+    return fpaths, fnames
+
+def ckpt_exists(log_dir):
+    _, fnames = list_fnames(log_dir, 'ckpt*.pt')
+    if len(fnames) > 0 :
+        return True
+    return False
+
+def get_max_epoch_saved(log_dir):
+    _, fnames = list_fnames(log_dir, 'ckpt*.pt')
+    epoch_saved = [int(fname.split('-')[-1].split('.')[0]) for fname in fnames]
+    return max(epoch_saved)
+
 
 if __name__ == "__main__":
     lll = init_lll(4,3,2)

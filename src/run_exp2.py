@@ -6,27 +6,28 @@ import seaborn as sns
 import torch.nn.functional as F
 from task import SimpleExp2
 from task import get_reward
-from models import LCALSTM as Agent
+# from models import LCALSTM as Agent
+from models import LCALSTM_after as Agent
 from utils import Parameters as P
-from utils.utils import to_sqnp, to_np, init_lll, save_ckpt
 from utils.stats import compute_stats, entropy
-# from models import LCALSTM_after as Agent
+from utils.utils import to_sqnp, to_np, init_lll, save_ckpt, load_ckpt, get_recall_info, get_max_epoch_saved, ckpt_exists
+
 
 sns.set(style='white', palette='colorblind', context='poster')
 
 '''init params'''
 # env param
 B = 10
-penalty = 3
+penalty = 8
 # model param
 add_query_indicator = True
-gating_type = 'pre'
+gating_type = 'post'
 n_hidden = 128
 lr = 1e-3
 cmpt = .5
 eta = 0.1
 # training param
-n_epochs = 10000
+n_epochs = 5000
 sup_epoch = 0
 test_mode = True
 # save all params
@@ -35,7 +36,7 @@ p = P(
     eta = eta, test_mode = test_mode, add_query_indicator = add_query_indicator,
     gating_type = gating_type, n_epochs = n_epochs, sup_epoch = sup_epoch
 )
-
+p.gen_log_dirs()
 '''init model and task'''
 exp = SimpleExp2(B)
 x_dim = exp.x_dim
@@ -47,10 +48,24 @@ agent = Agent(
 )
 optimizer_sup = torch.optim.Adam(agent.parameters(), lr=lr)
 optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr)
-# criterion = torch.nn.CrossEntropyLoss()
+
+'''parameters for keep training, will be skipped if the sim is new'''
+if p.log_dir_exists() and ckpt_exists(p.log_dir):
+    n_epochs_kt = 300
+    lr_kt = 1e-4
+    learning = False
+    epoch_loaded = get_max_epoch_saved(p.log_dir)
+    agent, optimizer = load_ckpt(epoch_loaded, p.log_dir, agent, optimizer_rl)
+    optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr_kt)
+    epoch_loaded += 1
+    n_epochs = n_epochs_kt
+else:
+    n_epochs_kt, lr_kt = 0, None
+    epoch_loaded = 0
+    learning = True
 
 '''train the model'''
-def run_exp2(n_epochs, sup_epoch, high_d_only):
+def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
     log_sf_ids = np.zeros((n_epochs, exp.n_trios))
     log_trial_types = [None] * n_epochs
     log_loss_s = torch.zeros((n_epochs, exp.n_trios, 3))
@@ -60,10 +75,12 @@ def run_exp2(n_epochs, sup_epoch, high_d_only):
     log_acc = init_lll(n_epochs, exp.n_trios, 3)
     log_a = init_lll(n_epochs, exp.n_trios, 3)
     log_dk = init_lll(n_epochs, exp.n_trios, 3)
+    log_tq_emg = torch.zeros((n_epochs, exp.n_trios, exp.T_test))
+    log_tq_ma = torch.zeros((n_epochs, exp.n_trios, exp.T_test, 2))
     # i,j,k,t=0,0,0,0
     for i in range(n_epochs):
         # make data
-        X, Y, log_sf_ids[i], log_trial_types[i] = exp.make_data(high_d_only=high_d_only, to_torch=True)
+        X, Y, log_sf_ids[i], log_trial_types[i] = exp.make_data(to_torch=True)
         permuted_tiro_ids = np.random.permutation(exp.n_trios)
         for j in permuted_tiro_ids:
             # go through the trio: event 1 (study) -> event 1' (study) -> event 1 (test)
@@ -95,24 +112,26 @@ def run_exp2(n_epochs, sup_epoch, high_d_only):
                     loss_sup += F.mse_loss(yhat_t, Y[j][k][t])
                     # loss_sup += criterion(yhat_t.view(1, -1), torch.argmax(Y[j][k][t]).view(-1,))
                     # log info
-                    if not high_d_only:
-                        log_acc[i][j][k].append(int(torch.argmax(yhat_t) == torch.argmax(Y[j][k][t])))
-                        log_a[i][j][k].append(int(a_t))
-                        log_dk[i][j][k].append(int(a_t) == exp.B)
+                    log_acc[i][j][k].append(int(torch.argmax(yhat_t) == torch.argmax(Y[j][k][t])))
+                    log_a[i][j][k].append(int(a_t))
+                    log_dk[i][j][k].append(int(a_t) == exp.B)
+                    if k == 2:
+                        log_tq_emg[i,j,t], log_tq_ma[i,j,t] = get_recall_info(cache_t)
 
                 # at the end of one event
                 loss_actor, loss_critic, pi_ent = agent.compute_a2c_loss()
 
-                # update weights
-                if i < sup_epoch:
-                    optimizer_sup.zero_grad()
-                    loss_sup.backward()
-                    optimizer_sup.step()
-                else:
-                    loss_rl = loss_actor + loss_critic - pi_ent * eta
-                    optimizer_rl.zero_grad()
-                    loss_rl.backward()
-                    optimizer_rl.step()
+                if learning:
+                    # update weights
+                    if i < sup_epoch:
+                        optimizer_sup.zero_grad()
+                        loss_sup.backward()
+                        optimizer_sup.step()
+                    else:
+                        loss_rl = loss_actor + loss_critic - pi_ent * eta
+                        optimizer_rl.zero_grad()
+                        loss_rl.backward()
+                        optimizer_rl.step()
 
                 # log info
                 log_loss_s[i,j,k] = loss_sup
@@ -123,12 +142,12 @@ def run_exp2(n_epochs, sup_epoch, high_d_only):
             agent.flush_episodic_memory()
 
         # at the end of an epoch
-        info_i = (i, log_loss_a[i].mean(), log_loss_c[i].mean(), log_return[i].mean())
+        info_i = (i + epoch_loaded, log_loss_a[i].mean(), log_loss_c[i].mean(), log_return[i].mean())
         print(f'%3d | L: a: %.2f, c: %.2f | R : %.2f' % info_i)
 
         # save weights for every other 1000 epochs
         if (i+1) % 1000 == 0:
-            save_ckpt(i, p.gen_log_dirs(), agent, optimizer_rl, verbose=True)
+            save_ckpt(i + epoch_loaded, p.log_dir, agent, optimizer_rl, verbose=True)
 
     log_info = [
         log_sf_ids,
@@ -140,15 +159,13 @@ def run_exp2(n_epochs, sup_epoch, high_d_only):
         log_acc,
         log_a,
         log_dk,
+        log_tq_emg,
+        log_tq_ma,
     ]
     return log_info
 
 # run the training scirpts
-log_info = run_exp2(n_epochs, sup_epoch, high_d_only=False)
-# # train on exp 2
-# n_epochs, sup_epoch = 2000, 0
-# log_info = run_exp2(n_epochs, sup_epoch, high_d_only=False)
-# # unpack info
+log_info = run_exp2(n_epochs, sup_epoch, epoch_loaded=epoch_loaded, learning=learning)
 [
     log_sf_ids,
     log_trial_types,
@@ -159,6 +176,8 @@ log_info = run_exp2(n_epochs, sup_epoch, high_d_only=False)
     log_acc,
     log_a,
     log_dk,
+    log_tq_emg,
+    log_tq_ma,
 ] = log_info
 
 '''preproc the results'''
@@ -202,13 +221,13 @@ def plot_learning_curve(title, data):
     return f, ax
 
 f, ax = plot_learning_curve('Cumulative R', log_return)
-fig_path = os.path.join(p.gen_log_dirs(), 'lr-r.png')
+fig_path = os.path.join(p.log_dir, 'lr-r.png')
 f.savefig(fig_path, dpi=100)
 f, ax = plot_learning_curve('Loss - actor', log_loss_a)
-fig_path = os.path.join(p.gen_log_dirs(), 'lr-a.png')
+fig_path = os.path.join(p.log_dir, 'lr-a.png')
 f.savefig(fig_path, dpi=100)
 f, ax = plot_learning_curve('Loss - critic', log_loss_c)
-fig_path = os.path.join(p.gen_log_dirs(), 'lr-c.png')
+fig_path = os.path.join(p.log_dir, 'lr-c.png')
 f.savefig(fig_path, dpi=100)
 
 
@@ -217,7 +236,7 @@ wtq_acc = get_within_trial_query_mean(log_acc)
 f, ax = plot_learning_curve('Within trial query acc', wtq_acc)
 ax.axhline(chance, linestyle='--', color='grey', label='chance')
 ax.legend()
-fig_path = os.path.join(p.gen_log_dirs(), 'lr-wtq-acc.png')
+fig_path = os.path.join(p.log_dir, 'lr-wtq-acc.png')
 f.savefig(fig_path, dpi=100)
 
 
@@ -225,36 +244,39 @@ tq_acc = get_test_query_mean(log_acc)
 f, ax = plot_learning_curve('Test query acc', np.mean(tq_acc,axis=-1))
 ax.axhline(chance, linestyle='--', color='grey', label='chance')
 ax.legend()
-fig_path = os.path.join(p.gen_log_dirs(), 'lr-tq-acc.png')
+fig_path = os.path.join(p.log_dir, 'lr-tq-acc.png')
 f.savefig(fig_path, dpi=100)
 
 cp_acc = get_copy_mean(log_acc)
 f, ax = plot_learning_curve('Copy acc', np.mean(cp_acc,axis=-1))
 ax.axhline(chance, linestyle='--', color='grey', label='chance')
 ax.legend()
-fig_path = os.path.join(p.gen_log_dirs(), 'lr-cp-acc.png')
+fig_path = os.path.join(p.log_dir, 'lr-cp-acc.png')
 f.savefig(fig_path, dpi=100)
 
 
 
 wtq_dk = get_within_trial_query_mean(log_dk)
 f, ax = plot_learning_curve('Within trial query, p(dk)', wtq_dk)
+ax.set_ylim([-.05,1.05])
 ax.legend()
-fig_path = os.path.join(p.gen_log_dirs(), 'pdk-wtq.png')
+fig_path = os.path.join(p.log_dir, 'pdk-wtq.png')
 f.savefig(fig_path, dpi=100)
 
 
 tq_dk = get_test_query_mean(log_dk)
 f, ax = plot_learning_curve('Test query, p(dk)', np.mean(tq_dk,axis=-1))
+ax.set_ylim([-.05,1.05])
 ax.legend()
-fig_path = os.path.join(p.gen_log_dirs(), 'pdk-tq.png')
+fig_path = os.path.join(p.log_dir, 'pdk-tq.png')
 f.savefig(fig_path, dpi=100)
 
 
 cp_dk = get_copy_mean(log_dk)
 f, ax = plot_learning_curve('Copy, p(dk)', np.mean(cp_dk,axis=-1))
+ax.set_ylim([-.05,1.05])
 ax.legend()
-fig_path = os.path.join(p.gen_log_dirs(), 'pdk-cp.png')
+fig_path = os.path.join(p.log_dir, 'pdk-cp.png')
 f.savefig(fig_path, dpi=100)
 
 
@@ -281,22 +303,66 @@ f, axes = plt.subplots(1, 3, figsize=(14, 5), sharey=True)
 
 axes[0].errorbar(x=x_, y=tq_acc_rs_hd_mu, yerr=tq_acc_rs_hd_se, color=c_pal[3])
 axes[0].errorbar(x=x_, y=tq_acc_rs_ld_mu, yerr=tq_acc_rs_ld_se, color=c_pal[0])
-axes[0].set_ylabel('correct')
+axes[0].set_title('correct')
 axes[1].errorbar(x=x_, y=tq_dk_rs_hd_mu, yerr=tq_dk_rs_hd_se, color=c_pal[3])
 axes[1].errorbar(x=x_, y=tq_dk_rs_ld_mu, yerr=tq_dk_rs_ld_se, color=c_pal[0])
-axes[1].set_ylabel('dont know')
+axes[1].set_title('dont know')
 axes[2].errorbar(x=x_, y=1 - tq_acc_rs_hd_mu - tq_dk_rs_hd_mu, yerr=tq_acc_rs_hd_se, color=c_pal[3])
 axes[2].errorbar(x=x_, y=1 - tq_acc_rs_ld_mu - tq_dk_rs_ld_mu, yerr=tq_acc_rs_ld_se, color=c_pal[0])
-axes[2].set_ylabel('incorrect')
+axes[2].set_title('incorrect')
 
 for ax in axes:
+    ax.set_ylabel('Frequency')
     ax.set_xlabel('Test query position')
     ax.set_xticks(x_)
     ax.set_xticklabels(x_+2)
     ax.set_ylim([-.05, 1.05])
-    ax.axhline(chance, ls='--', color='grey')
-f.legend(['chance', 'high d', 'low d'], loc=(.2,.25))
+axes[0].axhline(chance, ls='--', color='grey')
+f.legend(['chance', 'high d', 'low d'], loc=(.51,.5))
 sns.despine()
 f.tight_layout()
-fig_path = os.path.join(p.gen_log_dirs(), 'performance.png')
+fig_path = os.path.join(p.log_dir, 'performance.png')
 f.savefig(fig_path, dpi=100)
+
+
+'''analyze recall'''
+log_tq_emg = to_sqnp(log_tq_emg)
+log_tq_ma = to_sqnp(log_tq_ma)
+
+log_tq_emg_ld = log_tq_emg[np.array(log_trial_types)=='low d']
+log_tq_emg_hd = log_tq_emg[np.array(log_trial_types)=='high d']
+log_tq_ma_ld = log_tq_ma[np.array(log_trial_types)=='low d']
+log_tq_ma_hd = log_tq_ma[np.array(log_trial_types)=='high d']
+
+log_tq_emg_ld_mu, log_tq_emg_ld_se = compute_stats(log_tq_emg_ld,axis=0)
+log_tq_emg_hd_mu, log_tq_emg_hd_se = compute_stats(log_tq_emg_hd,axis=0)
+
+f, ax = plt.subplots(1, 1, figsize=(8, 5), sharey=True)
+x_ = np.arange(exp.T_test)
+x_ticklabels = ['0', '1', '2-q', '2-o', '3-q', '3-o', '4-q', '4-o']
+ax.errorbar(x=x_, y=log_tq_emg_ld_mu, yerr=log_tq_emg_ld_se, color=c_pal[3])
+ax.errorbar(x=x_, y=log_tq_emg_hd_mu, yerr=log_tq_emg_hd_se, color=c_pal[0])
+ax.set_ylabel('EM gate')
+ax.set_xticks(x_)
+ax.set_xticklabels(x_ticklabels)
+f.legend(['high d', 'low d'])
+sns.despine()
+f.tight_layout()
+
+
+log_tq_ma_ld_mu, log_tq_ma_ld_se = compute_stats(log_tq_ma_ld, axis=0)
+log_tq_ma_hd_mu, log_tq_ma_hd_se = compute_stats(log_tq_ma_hd, axis=0)
+f, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
+axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,0], yerr=log_tq_ma_ld_se[:,0], color=c_pal[3], label = 'targ')
+axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,1], yerr=log_tq_ma_ld_mu[:,1], color=c_pal[2], label = 'lure')
+axes[0].set_title('low d')
+f.legend()
+axes[1].errorbar(x=x_, y=log_tq_ma_hd_mu[:,0], yerr=log_tq_ma_hd_se[:,0], color=c_pal[3], label = 'targ')
+axes[1].errorbar(x=x_, y=log_tq_ma_hd_mu[:,1], yerr=log_tq_ma_hd_mu[:,1], color=c_pal[2], label = 'lure')
+axes[1].set_title('high d')
+axes[0].set_ylabel('Memory activation')
+for ax in axes:
+    ax.set_xticks(x_)
+    ax.set_xticklabels(x_ticklabels)
+sns.despine()
+f.tight_layout()

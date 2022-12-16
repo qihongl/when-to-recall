@@ -92,7 +92,7 @@ class LCALSTM(nn.Module):
         hpc_input_t = torch.cat([c_t, dec_act_t], dim=1)
         inps_t = sigmoid(self.hpc(hpc_input_t))
         # [inps_t, comp_t] = torch.squeeze(phi_t)
-        m_t = self.recall(c_t, inps_t)
+        m_t, ma_t = self.recall(c_t, inps_t)
         cm_t = c_t + m_t
         self.encode(cm_t)
         # make final dec
@@ -106,7 +106,7 @@ class LCALSTM(nn.Module):
         # scache results
         scalar_signal = [inps_t, 0, 0]
         vector_signal = [f_t, i_t, o_t]
-        misc = [h_t, m_t, cm_t, dec_act_t, self.em.get_vals()]
+        misc = [h_t, m_t, cm_t, dec_act_t, self.em.get_vals(), ma_t]
         cache = [vector_signal, scalar_signal, misc]
         return pi_a_t, value_t, (h_t, cm_t), cache
 
@@ -134,11 +134,11 @@ class LCALSTM(nn.Module):
             comp_t = self.cmpt
 
         if self.em.retrieval_off:
-            m_t = torch.zeros_like(c_t)
+            m_t, ma_t = torch.zeros_like(c_t), None
         else:
             # retrieve memory
-            m_t = self.em.get_memory(c_t, leak=0, comp=comp_t, w_input=inps_t)
-        return m_t
+            m_t, ma_t = self.em.get_memory(c_t, leak=0, comp=comp_t, w_input=inps_t)
+        return m_t, ma_t
 
     def encode(self, cm_t):
         if not self.em.encoding_off:
