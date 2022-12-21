@@ -8,6 +8,7 @@ from task import add_query_indicator
 from torch.distributions import Categorical
 from models.initializer import initialize_weights
 from torch.nn.functional import smooth_l1_loss
+from utils.stats import entropy
 
 # constants
 # number of vector signal (lstm gates)
@@ -46,9 +47,8 @@ class LCALSTM_after(nn.Module):
         self.actor = nn.Linear(dec_hidden_dim, output_dim)
         self.critic = nn.Linear(dec_hidden_dim, 1)
         # memory
-        self.hpc = nn.Linear(
-            rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim, N_SSIG
-        )
+        self.hpc = nn.Linear(rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim, N_SSIG)
+        # self.hpc = nn.Linear(rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim + 1, N_SSIG)
         self.em = EM(dict_len, rnn_hidden_dim, kernel)
         # the RL mechanism
         self.weight_init_scheme = weight_init_scheme
@@ -70,7 +70,7 @@ class LCALSTM_after(nn.Module):
 
     def forward(self, x_t, hc_prev, beta=1):
         if self.add_query_indicator:
-            x_t = add_query_indicator(x_t)        
+            x_t = add_query_indicator(x_t)
         # unpack activity
         x_t = x_t.view(1, 1, -1)
         (h_prev, c_prev) = hc_prev
@@ -96,7 +96,10 @@ class LCALSTM_after(nn.Module):
         # inps_t = sigmoid(self.hpc(hpc_input_t))
         # [inps_t, comp_t] = torch.squeeze(phi_t)
         m_t, ma_t = self.recall(c_t, self.em_gate)
+
         hpc_input_t = torch.cat([m_t, c_t, dec_act_t], dim=1)
+        # hpc_input_t = torch.cat([m_t, c_t, dec_act_t, entropy(ma_t)], dim=1)
+
         em_g_t = sigmoid(self.hpc(hpc_input_t))
         cm_t = c_t + m_t * em_g_t
         self.encode(cm_t)

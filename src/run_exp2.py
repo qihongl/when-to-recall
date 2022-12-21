@@ -12,7 +12,6 @@ from utils import Parameters as P
 from utils.stats import compute_stats, entropy
 from utils.utils import to_sqnp, to_np, init_lll, save_ckpt, load_ckpt, get_recall_info, get_max_epoch_saved, ckpt_exists
 
-
 sns.set(style='white', palette='colorblind', context='poster')
 
 '''init params'''
@@ -27,7 +26,7 @@ lr = 1e-3
 cmpt = .5
 eta = 0.1
 # training param
-n_epochs = 5000
+n_epochs = 4000
 sup_epoch = 0
 test_mode = True
 # save all params
@@ -51,10 +50,16 @@ optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr)
 
 '''parameters for keep training, will be skipped if the sim is new'''
 if p.log_dir_exists() and ckpt_exists(p.log_dir):
-    n_epochs_kt = 300
+    # keep training
+    n_epochs_kt = 4000
     lr_kt = 1e-4
-    learning = False
+    learning = True
+    # # just testing
+    # n_epochs_kt = 300
+    # lr_kt = 1e-4
+    # learning = False
     epoch_loaded = get_max_epoch_saved(p.log_dir)
+    # epoch_loaded = 13999
     agent, optimizer = load_ckpt(epoch_loaded, p.log_dir, agent, optimizer_rl)
     optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr_kt)
     epoch_loaded += 1
@@ -119,7 +124,7 @@ def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
                         log_tq_emg[i,j,t], log_tq_ma[i,j,t] = get_recall_info(cache_t)
 
                 # at the end of one event
-                loss_actor, loss_critic, pi_ent = agent.compute_a2c_loss()
+                loss_actor, loss_critic, pi_ent = agent.compute_a2c_loss(use_V=False)
 
                 if learning:
                     # update weights
@@ -144,11 +149,11 @@ def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
         # at the end of an epoch
         info_i = (i + epoch_loaded, log_loss_a[i].mean(), log_loss_c[i].mean(), log_return[i].mean())
         print(f'%3d | L: a: %.2f, c: %.2f | R : %.2f' % info_i)
-
         # save weights for every other 1000 epochs
-        if (i+1) % 1000 == 0:
+        if (i+1) % 1000 == 0 and learning:
             save_ckpt(i + epoch_loaded, p.log_dir, agent, optimizer_rl, verbose=True)
 
+    # done training, pack results
     log_info = [
         log_sf_ids,
         log_trial_types,
@@ -279,22 +284,26 @@ ax.legend()
 fig_path = os.path.join(p.log_dir, 'pdk-cp.png')
 f.savefig(fig_path, dpi=100)
 
-
+'''analyze the results at the end of training '''
 # num of epochs to analyze
 npa = 200
+
+# reformat data
 tq_dk_rs = np.reshape(tq_dk[-npa:], (-1, 3))
 tq_acc_rs = np.reshape(tq_acc[-npa:], (-1, 3))
 log_trial_types_rs = np.reshape(log_trial_types[-npa:], (-1))
-
+# split data according to condition
 hd = log_trial_types_rs == 'high d'
 ld = log_trial_types_rs == 'low d'
-
 tq_acc_rs_hd_mu, tq_acc_rs_hd_se = compute_stats(tq_acc_rs[hd],axis=0)
 tq_acc_rs_ld_mu, tq_acc_rs_ld_se = compute_stats(tq_acc_rs[ld],axis=0)
 tq_dk_rs_hd_mu, tq_dk_rs_hd_se = compute_stats(tq_dk_rs[hd],axis=0)
 tq_dk_rs_ld_mu, tq_dk_rs_ld_se = compute_stats(tq_dk_rs[ld],axis=0)
+tq_er_rs = np.logical_and(np.logical_not(tq_acc_rs), np.logical_not(tq_dk_rs))
+tq_er_rs_hd_mu, tq_er_rs_hd_se = compute_stats(tq_er_rs[hd],axis=0)
+tq_er_rs_ld_mu, tq_er_rs_ld_se = compute_stats(tq_er_rs[ld],axis=0)
 
-
+# plot behavioral performance
 c_pal = sns.color_palette('colorblind', n_colors=4)
 alpha = .3
 x_ = np.arange(3) # there are 3 query time points
@@ -307,8 +316,8 @@ axes[0].set_title('correct')
 axes[1].errorbar(x=x_, y=tq_dk_rs_hd_mu, yerr=tq_dk_rs_hd_se, color=c_pal[3])
 axes[1].errorbar(x=x_, y=tq_dk_rs_ld_mu, yerr=tq_dk_rs_ld_se, color=c_pal[0])
 axes[1].set_title('dont know')
-axes[2].errorbar(x=x_, y=1 - tq_acc_rs_hd_mu - tq_dk_rs_hd_mu, yerr=tq_acc_rs_hd_se, color=c_pal[3])
-axes[2].errorbar(x=x_, y=1 - tq_acc_rs_ld_mu - tq_dk_rs_ld_mu, yerr=tq_acc_rs_ld_se, color=c_pal[0])
+axes[2].errorbar(x=x_, y=tq_er_rs_hd_mu, yerr=tq_er_rs_hd_se, color=c_pal[3])
+axes[2].errorbar(x=x_, y=tq_er_rs_ld_mu, yerr=tq_er_rs_ld_se, color=c_pal[0])
 axes[2].set_title('incorrect')
 
 for ax in axes:
@@ -326,14 +335,16 @@ f.savefig(fig_path, dpi=100)
 
 
 '''analyze recall'''
+# re-format
 log_tq_emg = to_sqnp(log_tq_emg)
 log_tq_ma = to_sqnp(log_tq_ma)
-
+# split data according to condition
 log_tq_emg_ld = log_tq_emg[np.array(log_trial_types)=='low d']
 log_tq_emg_hd = log_tq_emg[np.array(log_trial_types)=='high d']
 log_tq_ma_ld = log_tq_ma[np.array(log_trial_types)=='low d']
 log_tq_ma_hd = log_tq_ma[np.array(log_trial_types)=='high d']
 
+# plot em gate
 log_tq_emg_ld_mu, log_tq_emg_ld_se = compute_stats(log_tq_emg_ld,axis=0)
 log_tq_emg_hd_mu, log_tq_emg_hd_se = compute_stats(log_tq_emg_hd,axis=0)
 
@@ -349,7 +360,7 @@ f.legend(['high d', 'low d'])
 sns.despine()
 f.tight_layout()
 
-
+# plot memory activation
 log_tq_ma_ld_mu, log_tq_ma_ld_se = compute_stats(log_tq_ma_ld, axis=0)
 log_tq_ma_hd_mu, log_tq_ma_hd_se = compute_stats(log_tq_ma_hd, axis=0)
 f, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
