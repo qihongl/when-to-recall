@@ -29,7 +29,7 @@ def moving_average(x, winsize):
     return np.convolve(x, np.ones(winsize), 'valid') / winsize
 
 
-def entropy(probs):
+def entropy(probs, to_probs=False):
     """calculate entropy.
     I'm using log base 2!
     Parameters
@@ -41,4 +41,20 @@ def entropy(probs):
     torch scalar
         the entropy of the distribution
     """
+    if to_probs:
+        probs = to_prob_distribution(probs)
     return - torch.stack([pi * torch.log2(pi) for pi in probs]).sum()
+
+def to_prob_distribution(probs):
+    return probs / probs.sum()
+
+
+if __name__ == "__main__":
+    d1 = torch.Tensor([.5, .5])
+    d2 = torch.Tensor([.99, .01])
+    d3 = torch.Tensor([.5, .5])
+    print(entropy(d1))
+    print(entropy(d2))
+    print(entropy(d3))
+
+    # to_prob_distribution(torch.Tensor([1,2]))

@@ -17,13 +17,13 @@ sns.set(style='white', palette='colorblind', context='poster')
 '''init params'''
 # env param
 B = 10
-penalty = 8
+penalty = 4
 # model param
 add_query_indicator = True
 gating_type = 'post'
-n_hidden = 128
+n_hidden = 130
 lr = 1e-3
-cmpt = .5
+cmpt = .9
 eta = 0.1
 # training param
 n_epochs = 4000
@@ -102,13 +102,16 @@ def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
                 loss_sup = 0
                 agent.init_rvpe()
                 for t in range(len(X[j][k])):
+                    # print(i,j,k,t, len(agent.em.vals))
                     # encode if and only if at event end
                     if t == exp.T-1 and k in [0, 1]:
                         agent.encoding_on()
                     else:
                         agent.encoding_off()
                     # forward
-                    pi_a_t, v_t, hc_t, cache_t = agent(X[j][k][t], hc_t)
+                    pi_a_t, v_t, hc_t, cache_t = agent(
+                        X[j][k][t], hc_t, condition_label = log_trial_types[i][j]
+                    )
                     a_t, p_a_t = agent.pick_action(pi_a_t)
                     r_t = get_reward(a_t, X[j][k][t], Y[j][k][t], penalty)
                     agent.append_rvpe(r_t, v_t, p_a_t, entropy(pi_a_t))
@@ -225,14 +228,16 @@ def plot_learning_curve(title, data):
         ax.axvline(sup_epoch, linestyle='--', color='red', label='start RL training')
     return f, ax
 
+epoch_save = n_epochs + epoch_loaded
+
 f, ax = plot_learning_curve('Cumulative R', log_return)
-fig_path = os.path.join(p.log_dir, 'lr-r.png')
+fig_path = os.path.join(p.log_dir, f'lr-r-ep-{epoch_save}.png')
 f.savefig(fig_path, dpi=100)
 f, ax = plot_learning_curve('Loss - actor', log_loss_a)
-fig_path = os.path.join(p.log_dir, 'lr-a.png')
+fig_path = os.path.join(p.log_dir, f'lr-a-ep-{epoch_save}.png')
 f.savefig(fig_path, dpi=100)
 f, ax = plot_learning_curve('Loss - critic', log_loss_c)
-fig_path = os.path.join(p.log_dir, 'lr-c.png')
+fig_path = os.path.join(p.log_dir, f'lr-c-ep-{epoch_save}.png')
 f.savefig(fig_path, dpi=100)
 
 
@@ -241,7 +246,7 @@ wtq_acc = get_within_trial_query_mean(log_acc)
 f, ax = plot_learning_curve('Within trial query acc', wtq_acc)
 ax.axhline(chance, linestyle='--', color='grey', label='chance')
 ax.legend()
-fig_path = os.path.join(p.log_dir, 'lr-wtq-acc.png')
+fig_path = os.path.join(p.log_dir, f'lr-wtq-acc-ep-{epoch_save}.png')
 f.savefig(fig_path, dpi=100)
 
 
@@ -249,14 +254,14 @@ tq_acc = get_test_query_mean(log_acc)
 f, ax = plot_learning_curve('Test query acc', np.mean(tq_acc,axis=-1))
 ax.axhline(chance, linestyle='--', color='grey', label='chance')
 ax.legend()
-fig_path = os.path.join(p.log_dir, 'lr-tq-acc.png')
+fig_path = os.path.join(p.log_dir, f'lr-tq-acc-ep-{epoch_save}.png')
 f.savefig(fig_path, dpi=100)
 
 cp_acc = get_copy_mean(log_acc)
 f, ax = plot_learning_curve('Copy acc', np.mean(cp_acc,axis=-1))
 ax.axhline(chance, linestyle='--', color='grey', label='chance')
 ax.legend()
-fig_path = os.path.join(p.log_dir, 'lr-cp-acc.png')
+fig_path = os.path.join(p.log_dir, f'lr-cp-acc-ep-{epoch_save}.png')
 f.savefig(fig_path, dpi=100)
 
 
@@ -265,7 +270,7 @@ wtq_dk = get_within_trial_query_mean(log_dk)
 f, ax = plot_learning_curve('Within trial query, p(dk)', wtq_dk)
 ax.set_ylim([-.05,1.05])
 ax.legend()
-fig_path = os.path.join(p.log_dir, 'pdk-wtq.png')
+fig_path = os.path.join(p.log_dir, f'pdk-wtq-ep-{epoch_save}.png')
 f.savefig(fig_path, dpi=100)
 
 
@@ -273,7 +278,7 @@ tq_dk = get_test_query_mean(log_dk)
 f, ax = plot_learning_curve('Test query, p(dk)', np.mean(tq_dk,axis=-1))
 ax.set_ylim([-.05,1.05])
 ax.legend()
-fig_path = os.path.join(p.log_dir, 'pdk-tq.png')
+fig_path = os.path.join(p.log_dir, f'pdk-tq-ep-{epoch_save}.png')
 f.savefig(fig_path, dpi=100)
 
 
@@ -281,7 +286,7 @@ cp_dk = get_copy_mean(log_dk)
 f, ax = plot_learning_curve('Copy, p(dk)', np.mean(cp_dk,axis=-1))
 ax.set_ylim([-.05,1.05])
 ax.legend()
-fig_path = os.path.join(p.log_dir, 'pdk-cp.png')
+fig_path = os.path.join(p.log_dir, f'pdk-cp-ep-{epoch_save}.png')
 f.savefig(fig_path, dpi=100)
 
 '''analyze the results at the end of training '''
@@ -330,7 +335,7 @@ axes[0].axhline(chance, ls='--', color='grey')
 f.legend(['chance', 'high d', 'low d'], loc=(.51,.5))
 sns.despine()
 f.tight_layout()
-fig_path = os.path.join(p.log_dir, 'performance.png')
+fig_path = os.path.join(p.log_dir, f'performance-ep-{epoch_save}.png')
 f.savefig(fig_path, dpi=100)
 
 
@@ -359,6 +364,8 @@ ax.set_xticklabels(x_ticklabels)
 f.legend(['high d', 'low d'])
 sns.despine()
 f.tight_layout()
+fig_path = os.path.join(p.log_dir, f'emgate-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)
 
 # plot memory activation
 log_tq_ma_ld_mu, log_tq_ma_ld_se = compute_stats(log_tq_ma_ld, axis=0)
@@ -377,3 +384,5 @@ for ax in axes:
     ax.set_xticklabels(x_ticklabels)
 sns.despine()
 f.tight_layout()
+fig_path = os.path.join(p.log_dir, f'mem-act-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)

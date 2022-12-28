@@ -22,7 +22,7 @@ class SimpleExp2():
         self.n_trios = B
         self.loc_sf_test = {'low d': 1, 'high d': 6}
         self.t_wtq = {'train': np.arange(0, self.T * 2, 2), 'test' : np.array([-1])}
-        self.T_test = self.T + self.T - 2 # time points during test 
+        self.T_test = self.T + self.T - 2 # time points during test
 
     def sample_feature_values(self):
         return np.random.choice(range(0, self.B), size=(self.T-1,))
@@ -205,6 +205,14 @@ def is_query(x_t):
 def add_query_indicator(x_t):
     assert torch.is_tensor(x_t)
     if is_query(x_t):
+        return torch.cat([x_t, torch.ones(1)])
+    else:
+        return torch.cat([x_t, torch.zeros(1)])
+
+def add_condition_label(x_t, condition_label):
+    assert torch.is_tensor(x_t)
+    assert condition_label in ['low d', 'high d']
+    if condition_label == 'low d':
         return torch.cat([x_t, torch.ones(1)])
     else:
         return torch.cat([x_t, torch.zeros(1)])

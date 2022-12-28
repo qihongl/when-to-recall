@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import pdb
 from models.EM import EM
-from task import add_query_indicator
+from task import add_query_indicator, add_condition_label
 from torch.distributions import Categorical
 from models.initializer import initialize_weights
 from torch.nn.functional import smooth_l1_loss
@@ -30,13 +30,15 @@ class LCALSTM_after(nn.Module):
             cmpt=.8, em_gate=.3, add_query_indicator=False,
     ):
         super(LCALSTM_after, self).__init__()
+        self.input_dim = input_dim
+        self.add_query_indicator = add_query_indicator
+        self.add_condition_label = add_condition_label
+        if add_query_indicator:
+            self.input_dim +=1
+        if add_condition_label:
+            self.input_dim += 1
         self.cmpt = cmpt
         self.em_gate = em_gate
-        self.add_query_indicator = add_query_indicator
-        if add_query_indicator:
-            self.input_dim = input_dim+1
-        else:
-            self.input_dim = input_dim
         self.rnn_hidden_dim = rnn_hidden_dim
         self.n_hidden_total = (N_VSIG + 1) * rnn_hidden_dim + N_SSIG
         # rnn module
@@ -47,8 +49,8 @@ class LCALSTM_after(nn.Module):
         self.actor = nn.Linear(dec_hidden_dim, output_dim)
         self.critic = nn.Linear(dec_hidden_dim, 1)
         # memory
+        # self.hpc = nn.Linear(rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim, N_SSIG)
         self.hpc = nn.Linear(rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim, N_SSIG)
-        # self.hpc = nn.Linear(rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim + 1, N_SSIG)
         self.em = EM(dict_len, rnn_hidden_dim, kernel)
         # the RL mechanism
         self.weight_init_scheme = weight_init_scheme
@@ -68,9 +70,11 @@ class LCALSTM_after(nn.Module):
         c_0_ = sample_random_vector(self.rnn_hidden_dim, scale)
         return (h_0_, c_0_)
 
-    def forward(self, x_t, hc_prev, beta=1):
+    def forward(self, x_t, hc_prev, condition_label=None, beta=1):
         if self.add_query_indicator:
             x_t = add_query_indicator(x_t)
+        if self.add_condition_label:
+            x_t = add_condition_label(x_t, condition_label)
         # unpack activity
         x_t = x_t.view(1, 1, -1)
         (h_prev, c_prev) = hc_prev
@@ -96,9 +100,11 @@ class LCALSTM_after(nn.Module):
         # inps_t = sigmoid(self.hpc(hpc_input_t))
         # [inps_t, comp_t] = torch.squeeze(phi_t)
         m_t, ma_t = self.recall(c_t, self.em_gate)
-
         hpc_input_t = torch.cat([m_t, c_t, dec_act_t], dim=1)
-        # hpc_input_t = torch.cat([m_t, c_t, dec_act_t, entropy(ma_t)], dim=1)
+        # # recall_ent = entropy(ma_t, to_probs=True).view(1, -1)
+        # recall_ent = torch.abs(ma_t.squeeze()[0] - ma_t.squeeze()[1]).view(1, -1)
+        # hpc_input_t = torch.cat([m_t, c_t, dec_act_t, recall_ent], dim=1)
+        # print(hpc_input_t)
 
         em_g_t = sigmoid(self.hpc(hpc_input_t))
         cm_t = c_t + m_t * em_g_t
@@ -142,7 +148,9 @@ class LCALSTM_after(nn.Module):
             comp_t = self.cmpt
 
         if self.em.retrieval_off:
-            m_t, ma_t = torch.zeros_like(c_t), None
+            # m_t, ma_t = torch.zeros_like(c_t), None
+            # TODO 2 is specific for this cody's exp 2
+            m_t, ma_t = torch.zeros_like(c_t), torch.Tensor([.5, .5])
         else:
             # retrieve memory
             m_t, ma_t = self.em.get_memory(c_t, leak=0, comp=comp_t, w_input=inps_t)
