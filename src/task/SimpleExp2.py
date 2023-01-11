@@ -202,21 +202,22 @@ def is_query(x_t):
         raise ValueError('invalid x: must be 1 hot or 2 hot vector')
 
 
-def add_query_indicator(x_t):
+def _add_query_indicator(x_t):
     assert torch.is_tensor(x_t)
     if is_query(x_t):
         return torch.cat([x_t, torch.ones(1)])
     else:
         return torch.cat([x_t, torch.zeros(1)])
 
-def add_condition_label(x_t, condition_label):
+def _add_condition_label(x_t, condition_label):
     assert torch.is_tensor(x_t)
+    return torch.cat([x_t.squeeze(), condition_label_to_int(condition_label)])
+
+def _condition_label_to_int(condition_label):
     assert condition_label in ['low d', 'high d']
     if condition_label == 'low d':
-        return torch.cat([x_t, torch.ones(1)])
-    else:
-        return torch.cat([x_t, torch.zeros(1)])
-
+        return torch.ones(1)
+    return torch.zeros(1)
 
 def interleave_two_arrays(a, b, axis=0):
     '''demo

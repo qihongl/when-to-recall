@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import pdb
 from models.EM import EM
-from task import add_query_indicator, add_condition_label
+from task import _add_query_indicator, _add_condition_label
 from torch.distributions import Categorical
 from models.initializer import initialize_weights
 from torch.nn.functional import smooth_l1_loss
@@ -69,9 +69,9 @@ class LCALSTM(nn.Module):
 
     def forward(self, x_t, hc_prev, condition_label=None, beta=1):
         if self.add_query_indicator:
-            x_t = add_query_indicator(x_t)
+            x_t = _add_query_indicator(x_t)
         if self.add_condition_label:
-            x_t = add_condition_label(x_t, condition_label)
+            x_t = _add_condition_label(x_t, condition_label)
         # unpack activity
         x_t = x_t.view(1, 1, -1)
         (h_prev, c_prev) = hc_prev
