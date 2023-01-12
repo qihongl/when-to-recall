@@ -35,6 +35,8 @@ class LCALSTM_after(nn.Module):
         self.add_condition_label = add_condition_label
         if add_query_indicator:
             self.input_dim +=1
+        if add_condition_label:
+            self.input_dim +=1
         self.cmpt = cmpt
         self.em_gate = em_gate
         self.rnn_hidden_dim = rnn_hidden_dim
@@ -76,8 +78,8 @@ class LCALSTM_after(nn.Module):
     def forward(self, x_t, hc_prev, condition_label=None, beta=1):
         if self.add_query_indicator:
             x_t = _add_query_indicator(x_t)
-        # if self.add_condition_label:
-        #     x_t = _add_condition_label(x_t, condition_label)
+        if self.add_condition_label:
+            x_t = _add_condition_label(x_t, condition_label)
         # unpack activity
         x_t = x_t.view(1, 1, -1)
         (h_prev, c_prev) = hc_prev
@@ -114,7 +116,7 @@ class LCALSTM_after(nn.Module):
         #     hpc_input_t = torch.cat([m_t, c_t, dec_act_t], dim=1)
 
         # recall_ent = entropy(ma_t, to_probs=True).view(1, -1)
-        mem_diff = torch.abs(ma_t.squeeze()[0] - ma_t.squeeze()[1]).view(1, -1)
+        # mem_diff = torch.abs(ma_t.squeeze()[0] - ma_t.squeeze()[1]).view(1, -1)
         # conflict = ma_t.squeeze()[0] * ma_t.squeeze()[1]
         # hpc_input_t = torch.cat([m_t, c_t, dec_act_t, mem_diff.view(1,-1)], dim=1)
         # print(hpc_input_t)

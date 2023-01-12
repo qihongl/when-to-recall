@@ -14,8 +14,11 @@ from utils.utils import to_sqnp, to_np, init_lll, save_ckpt, load_ckpt, get_reca
 
 sns.set(style='white', palette='colorblind', context='poster')
 
+
+
 '''init params'''
 # env param
+subj_id = 0
 B = 10
 penalty = 4
 # model param
@@ -32,12 +35,14 @@ sup_epoch = 0
 test_mode = True
 # save all params
 p = P(
-    B = B, penalty = penalty, n_hidden = n_hidden, lr = lr, cmpt = cmpt,
+    subj_id=subj_id, B = B, penalty = penalty, n_hidden = n_hidden, lr = lr, cmpt = cmpt,
     eta = eta, test_mode = test_mode, add_query_indicator = add_query_indicator,
     gating_type = gating_type, n_epochs = n_epochs, sup_epoch = sup_epoch
 )
 p.gen_log_dirs()
 '''init model and task'''
+np.random.seed(subj_id)
+torch.manual_seed(subj_id)
 exp = SimpleExp2(B)
 x_dim = exp.x_dim
 y_dim = exp.y_dim+1 # add 1 for the don't know unit
@@ -87,7 +92,7 @@ def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
     # i,j,k,t=0,0,0,0
     for i in range(n_epochs):
         # make data
-        X, Y, log_sf_ids[i], log_trial_types[i] = exp.make_data(to_torch=True)
+        X, Y, log_sf_ids[i], log_trial_types[i] = exp.make_data(to_torch=True, test_mode=p.test_mode)
         permuted_tiro_ids = np.random.permutation(exp.n_trios)
         for j in permuted_tiro_ids:
             # go through the trio: event 1 (study) -> event 1' (study) -> event 1 (test)

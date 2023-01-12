@@ -371,7 +371,7 @@ axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,1], yerr=log_tq_ma_ld_mu[:,1], color=
 axes[0].set_title('low d')
 f.legend()
 axes[1].errorbar(x=x_, y=log_tq_ma_hd_mu[:,0], yerr=log_tq_ma_hd_se[:,0], color=c_pal[3], label = 'targ')
-axes[1].errorbar(x=x_, y=log_tq_ma_hd_mu[:,1], yerr=log_tq_ma_hd_mu[:,1], color=c_pal[2], label = 'lure')
+axes[1].errorbar(x=x_, y=log_tq_ma_hd_mu[:,1], yerr=log_tq_ma_hd_se[:,1], color=c_pal[2], label = 'lure')
 axes[1].set_title('high d')
 axes[0].set_ylabel('Memory activation')
 for ax in axes:

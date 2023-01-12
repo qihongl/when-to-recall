@@ -253,7 +253,7 @@ if __name__ == "__main__":
 
     '''how to init'''
     B = 4
-    test_mode = 1
+    test_mode = 0
     exp = SimpleExp2(B)
 
     '''core func'''

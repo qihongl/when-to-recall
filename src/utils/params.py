@@ -8,6 +8,7 @@ class Parameters():
 
     def __init__(
         self,
+        subj_id = subj_id,
         B = 10,
         penalty = 10,
         n_hidden = 128,
@@ -31,6 +32,7 @@ class Parameters():
         assert type(test_mode) == type(True)
         assert gating_type in GATING_TYPES
         assert n_epochs >= sup_epoch >= 0
+        self.subj_id = subj_id
         self.B = B
         self.penalty = penalty
         self.n_hidden = n_hidden
@@ -42,7 +44,7 @@ class Parameters():
         self.gating_type = gating_type
         self.n_epochs = n_epochs
         self.sup_epoch = sup_epoch
-        sub_dirs = f'B-{B}/n_hidden-{n_hidden}-lr-{lr}/gating-{gating_type}/task-unit-{int(add_query_indicator)}/penalty-{penalty}/train-mode-{int(test_mode)}-n_epochs-{n_epochs}-sup_epoch-{sup_epoch}/'
+        sub_dirs = f'B-{B}/n_hidden-{n_hidden}-lr-{lr}/gating-{gating_type}/task-unit-{int(add_query_indicator)}/penalty-{penalty}/train-mode-{int(test_mode)}-n_epochs-{n_epochs}-sup_epoch-{sup_epoch}/subj_id-{subj_id}/'
         self.log_dir = os.path.join(LOG_ROOT, sub_dirs)
         self.gen_log_dirs(verbose=verbose)
 
