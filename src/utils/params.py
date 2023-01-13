@@ -8,7 +8,7 @@ class Parameters():
 
     def __init__(
         self,
-        subj_id = subj_id,
+        subj_id = 0,
         B = 10,
         penalty = 10,
         n_hidden = 128,

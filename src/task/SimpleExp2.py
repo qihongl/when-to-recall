@@ -211,7 +211,7 @@ def _add_query_indicator(x_t):
 
 def _add_condition_label(x_t, condition_label):
     assert torch.is_tensor(x_t)
-    return torch.cat([x_t.squeeze(), condition_label_to_int(condition_label)])
+    return torch.cat([x_t.squeeze(), _condition_label_to_int(condition_label)])
 
 def _condition_label_to_int(condition_label):
     assert condition_label in ['low d', 'high d']
