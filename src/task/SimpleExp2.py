@@ -219,6 +219,24 @@ def _condition_label_to_int(condition_label):
         return torch.ones(1)
     return torch.zeros(1)
 
+def ground_truth_mem_sig(condition_label, t, k):
+    assert condition_label in ['low d', 'high d']
+    # don't recall if not in test phase
+    if k < 2:
+        return torch.zeros(1)
+    # if in test phase, delay recall until t == 3 (t-2o) for the low d case
+    if condition_label == 'low d':
+        if t <= 2:
+            return torch.zeros(1)
+        else:
+            return torch.ones(1)
+    else:
+        if t == 0:
+            return torch.zeros(1)
+        else:
+            return torch.ones(1)
+
+
 def interleave_two_arrays(a, b, axis=0):
     '''demo
     a = np.zeros((3,3))
@@ -253,7 +271,7 @@ if __name__ == "__main__":
 
     '''how to init'''
     B = 4
-    test_mode = 0
+    test_mode = True
     exp = SimpleExp2(B)
 
     '''core func'''

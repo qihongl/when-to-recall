@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import pdb
 from models.EM import EM
-from task import _add_query_indicator, _add_condition_label
+from task import _add_query_indicator, _add_condition_label, _condition_label_to_int
 from torch.distributions import Categorical
 from models.initializer import initialize_weights
 from torch.nn.functional import smooth_l1_loss
@@ -35,8 +35,8 @@ class LCALSTM_after(nn.Module):
         self.add_condition_label = add_condition_label
         if add_query_indicator:
             self.input_dim +=1
-        if add_condition_label:
-            self.input_dim +=1
+        # if add_condition_label:
+        #     self.input_dim +=1
         self.cmpt = cmpt
         self.em_gate = em_gate
         self.rnn_hidden_dim = rnn_hidden_dim
@@ -45,12 +45,13 @@ class LCALSTM_after(nn.Module):
         self.i2h = nn.Linear(self.input_dim, self.n_hidden_total)
         self.h2h = nn.Linear(rnn_hidden_dim, self.n_hidden_total)
         # deicion module
-        # self.ih = nn.Linear(rnn_hidden_dim, dec_hidden_dim)
         self.ih = nn.Linear(rnn_hidden_dim, dec_hidden_dim)
+        # self.ih = nn.Linear(rnn_hidden_dim+1, dec_hidden_dim)
         self.actor = nn.Linear(dec_hidden_dim, output_dim)
         self.critic = nn.Linear(dec_hidden_dim, 1)
         # memory
-        self.hpc = nn.Linear(rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim, N_SSIG)
+        # self.hpc = nn.Linear(rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim, N_SSIG)
+        self.hpc = nn.Linear(rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim + 1, N_SSIG)
         # if not add_condition_label:
         #     self.hpc = nn.Linear(rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim, N_SSIG)
         # else:
@@ -75,7 +76,7 @@ class LCALSTM_after(nn.Module):
         c_0_ = sample_random_vector(self.rnn_hidden_dim, scale)
         return (h_0_, c_0_)
 
-    def forward(self, x_t, hc_prev, condition_label=None, beta=1):
+    def forward(self, x_t, hc_prev, mem_sig=None, beta=1):
         if self.add_query_indicator:
             x_t = _add_query_indicator(x_t)
         if self.add_condition_label:
@@ -102,34 +103,36 @@ class LCALSTM_after(nn.Module):
 
         # h_t_m = torch.cat([h_t, torch.zeros(1).view(1, -1)], dim=1)
         dec_act_t = F.relu(self.ih(h_t))
+        # dec_act_t = F.relu(self.ih(h_t_m))
         # recall / encode
         # hpc_input_t = torch.cat([c_t, dec_act_t], dim=1)
         # inps_t = sigmoid(self.hpc(hpc_input_t))
         # [inps_t, comp_t] = torch.squeeze(phi_t)
         m_t, ma_t = self.recall(c_t, self.em_gate)
-        hpc_input_t = torch.cat([m_t, c_t, dec_act_t], dim=1)
+        # hpc_input_t = torch.cat([m_t, c_t, dec_act_t], dim=1)
 
         # if self.add_condition_label:
         #     cond = condition_label_to_int(condition_label)
         #     hpc_input_t = torch.cat([m_t, c_t, dec_act_t, cond.view(1,-1)], dim=1)
         # else:
         #     hpc_input_t = torch.cat([m_t, c_t, dec_act_t], dim=1)
+        # cond = _condition_label_to_int(condition_label)
+        # hpc_input_t = torch.cat([m_t, c_t, dec_act_t, mem_sig.view(1,-1)], dim=1)
 
         # recall_ent = entropy(ma_t, to_probs=True).view(1, -1)
-        # mem_diff = torch.abs(ma_t.squeeze()[0] - ma_t.squeeze()[1]).view(1, -1)
+        mem_diff = torch.abs(ma_t.squeeze()[0] - ma_t.squeeze()[1]).view(1, -1)
         # conflict = ma_t.squeeze()[0] * ma_t.squeeze()[1]
-        # hpc_input_t = torch.cat([m_t, c_t, dec_act_t, mem_diff.view(1,-1)], dim=1)
+        hpc_input_t = torch.cat([m_t, c_t, dec_act_t, mem_diff.view(1,-1)], dim=1)
         # print(hpc_input_t)
 
         em_g_t = sigmoid(self.hpc(hpc_input_t))
         cm_t = c_t + m_t * em_g_t
         self.encode(cm_t)
         # make final dec
-        h_t = torch.mul(o_t, cm_t.tanh())
-        #
-        # h_t_m = torch.cat([h_t, mem_diff], dim=1)
-
+        # h_t = torch.mul(o_t, cm_t.tanh())
+        # h_t_m = torch.cat([h_t, mem_sig.view(1,-1)], dim=1)
         dec_act_t = F.relu(self.ih(h_t))
+        # dec_act_t = F.relu(self.ih(h_t_m))
         pi_a_t = _softmax(self.actor(dec_act_t), beta)
         value_t = self.critic(dec_act_t)
         # reshape data

@@ -5,40 +5,45 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import torch.nn.functional as F
 from task import SimpleExp2
-from task import get_reward
+from task import get_reward, ground_truth_mem_sig
 # from models import LCALSTM as Agent
 from models import LCALSTM_after as Agent
 from utils import Parameters as P
 from utils.stats import compute_stats, entropy
-from utils.utils import to_sqnp, to_np, init_lll, load_ckpt, get_recall_info, get_max_epoch_saved, ckpt_exists
+from utils.utils import to_sqnp, to_np, init_lll, load_ckpt, get_recall_info, \
+    get_max_epoch_saved, ckpt_exists
 
 sns.set(style='white', palette='colorblind', context='poster')
 
+
 '''init params'''
 # env param
+subj_id = 0
 B = 10
-penalty = 4
+penalty = 6
 # model param
 add_query_indicator = True
 add_condition_label = False
 gating_type = 'post'
-n_hidden = 122
+n_hidden = 128
 lr = 1e-3
-cmpt = .9
+cmpt = .8
 eta = 0.1
 # training param
-n_epochs = 5000
+n_epochs = 10000
 sup_epoch = 0
 test_mode = True
 
 # save all params
 p = P(
-    B = B, penalty = penalty, n_hidden = n_hidden, lr = lr, cmpt = cmpt,
+    subj_id=subj_id, B = B, penalty = penalty, n_hidden = n_hidden, lr = lr, cmpt = cmpt,
     eta = eta, test_mode = test_mode, add_query_indicator = add_query_indicator,
     gating_type = gating_type, n_epochs = n_epochs, sup_epoch = sup_epoch
 )
 p.gen_log_dirs()
 '''init model and task'''
+np.random.seed(subj_id)
+torch.manual_seed(subj_id)
 exp = SimpleExp2(B)
 x_dim = exp.x_dim
 y_dim = exp.y_dim+1 # add 1 for the don't know unit
@@ -55,14 +60,14 @@ n_epochs_kt = 200
 lr_kt = 0
 learning = False
 epoch_loaded = get_max_epoch_saved(p.log_dir)
-# epoch_loaded = 13999
+# epoch_loaded = 5999
 agent, optimizer = load_ckpt(epoch_loaded, p.log_dir, agent, optimizer_rl)
 optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr_kt)
 epoch_loaded += 1
 n_epochs = n_epochs_kt
 
 '''train the model'''
-def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
+def run_exp2(n_epochs, epoch_loaded=0, learning=True):
 
     log_sf_ids = np.zeros((n_epochs, exp.n_trios))
     log_trial_types = [None] * n_epochs
@@ -103,7 +108,7 @@ def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
                         agent.encoding_off()
                     # forward
                     pi_a_t, v_t, hc_t, cache_t = agent(
-                        X[j][k][t], hc_t, condition_label = log_trial_types[i][j]
+                        X[j][k][t], hc_t, mem_sig = ground_truth_mem_sig(log_trial_types[i][j], t, k)
                     )
                     a_t, p_a_t = agent.pick_action(pi_a_t)
                     r_t = get_reward(a_t, X[j][k][t], Y[j][k][t], penalty)
@@ -125,15 +130,10 @@ def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
 
                 if learning:
                     # update weights
-                    if i < sup_epoch:
-                        optimizer_sup.zero_grad()
-                        loss_sup.backward()
-                        optimizer_sup.step()
-                    else:
-                        loss_rl = loss_actor + loss_critic - pi_ent * eta
-                        optimizer_rl.zero_grad()
-                        loss_rl.backward()
-                        optimizer_rl.step()
+                    loss_rl = loss_actor + loss_critic - pi_ent * eta
+                    optimizer_rl.zero_grad()
+                    loss_rl.backward()
+                    optimizer_rl.step()
 
                 # log info
                 if not learning:
@@ -168,7 +168,7 @@ def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
     return log_info
 
 # run the training scirpts
-log_info = run_exp2(n_epochs, sup_epoch, epoch_loaded=epoch_loaded, learning=learning)
+log_info = run_exp2(n_epochs, epoch_loaded=epoch_loaded, learning=learning)
 [
     log_sf_ids,
     log_trial_types,
@@ -219,8 +219,6 @@ def plot_learning_curve(title, data):
     ax.set_ylabel(title)
     f.tight_layout()
     sns.despine()
-    if sup_epoch < n_epochs:
-        ax.axvline(sup_epoch, linestyle='--', color='red', label='start RL training')
     return f, ax
 
 epoch_save = n_epochs + epoch_loaded
@@ -345,18 +343,19 @@ log_tq_ma_ld = log_tq_ma[np.array(log_trial_types)=='low d']
 log_tq_ma_hd = log_tq_ma[np.array(log_trial_types)=='high d']
 
 # plot em gate
-log_tq_emg_ld_mu, log_tq_emg_ld_se = compute_stats(log_tq_emg_ld,axis=0)
-log_tq_emg_hd_mu, log_tq_emg_hd_se = compute_stats(log_tq_emg_hd,axis=0)
+log_tq_emg_ld_mu, log_tq_emg_ld_se = compute_stats(log_tq_emg_ld, axis=0)
+log_tq_emg_hd_mu, log_tq_emg_hd_se = compute_stats(log_tq_emg_hd, axis=0)
 
 f, ax = plt.subplots(1, 1, figsize=(8, 5), sharey=True)
 x_ = np.arange(exp.T_test)
 x_ticklabels = ['0', '1', '2-q', '2-o', '3-q', '3-o', '4-q', '4-o']
-ax.errorbar(x=x_, y=log_tq_emg_ld_mu, yerr=log_tq_emg_ld_se, color=c_pal[3])
-ax.errorbar(x=x_, y=log_tq_emg_hd_mu, yerr=log_tq_emg_hd_se, color=c_pal[0])
+ax.errorbar(x=x_, y=log_tq_emg_ld_mu, yerr=log_tq_emg_ld_se, color=c_pal[3], label='low d')
+ax.errorbar(x=x_, y=log_tq_emg_hd_mu, yerr=log_tq_emg_hd_se, color=c_pal[0], label='high d')
 ax.set_ylabel('EM gate')
 ax.set_xticks(x_)
 ax.set_xticklabels(x_ticklabels)
-f.legend(['high d', 'low d'])
+# ax.set_ylim([.9, 1.005])
+ax.legend()
 sns.despine()
 f.tight_layout()
 fig_path = os.path.join(p.log_dir, f'emgate-ep-{epoch_save}.png')
@@ -367,7 +366,7 @@ log_tq_ma_ld_mu, log_tq_ma_ld_se = compute_stats(log_tq_ma_ld, axis=0)
 log_tq_ma_hd_mu, log_tq_ma_hd_se = compute_stats(log_tq_ma_hd, axis=0)
 f, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
 axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,0], yerr=log_tq_ma_ld_se[:,0], color=c_pal[3], label = 'targ')
-axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,1], yerr=log_tq_ma_ld_mu[:,1], color=c_pal[2], label = 'lure')
+axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,1], yerr=log_tq_ma_ld_se[:,1], color=c_pal[2], label = 'lure')
 axes[0].set_title('low d')
 f.legend()
 axes[1].errorbar(x=x_, y=log_tq_ma_hd_mu[:,0], yerr=log_tq_ma_hd_se[:,0], color=c_pal[3], label = 'targ')

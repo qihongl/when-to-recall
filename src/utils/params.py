@@ -1,6 +1,5 @@
 import os
 
-LOG_ROOT = '../log'
 GATING_TYPES = ['pre', 'post']
 
 
@@ -21,6 +20,8 @@ class Parameters():
         n_epochs = 4000,
         sup_epoch = 2000,
         verbose=True,
+        exp_name='testing',
+        log_root='../log',
     ):
         assert B >= 2
         assert penalty >= 0
@@ -44,8 +45,10 @@ class Parameters():
         self.gating_type = gating_type
         self.n_epochs = n_epochs
         self.sup_epoch = sup_epoch
-        sub_dirs = f'B-{B}/n_hidden-{n_hidden}-lr-{lr}/gating-{gating_type}/task-unit-{int(add_query_indicator)}/penalty-{penalty}/train-mode-{int(test_mode)}-n_epochs-{n_epochs}-sup_epoch-{sup_epoch}/subj_id-{subj_id}/'
-        self.log_dir = os.path.join(LOG_ROOT, sub_dirs)
+        self.exp_name = exp_name
+        self.log_root = log_root
+        sub_dirs = f'{exp_name}/B-{B}/n_hidden-{n_hidden}-lr-{lr}/gating-{gating_type}/task-unit-{int(add_query_indicator)}/penalty-{penalty}/train-mode-{int(test_mode)}-n_epochs-{n_epochs}-sup_epoch-{sup_epoch}/subj_id-{subj_id}/'
+        self.log_dir = os.path.join(log_root, sub_dirs)
         self.gen_log_dirs(verbose=verbose)
 
     def gen_log_dirs(self, verbose=False):

@@ -4,40 +4,82 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch.nn.functional as F
+import argparse
+# from torch.optim.lr_scheduler import ConstantLR
 from task import SimpleExp2
-from task import get_reward
+from task import get_reward, ground_truth_mem_sig
 # from models import LCALSTM as Agent
 from models import LCALSTM_after as Agent
 from utils import Parameters as P
 from utils.stats import compute_stats, entropy
-from utils.utils import to_sqnp, to_np, init_lll, save_ckpt, load_ckpt, get_recall_info, get_max_epoch_saved, ckpt_exists
+from utils.utils import to_sqnp, to_np, init_lll, save_ckpt, load_ckpt, \
+    get_recall_info, get_max_epoch_saved, ckpt_exists
 
 sns.set(style='white', palette='colorblind', context='poster')
 
+# matplotlib.use('Agg')
+parser = argparse.ArgumentParser()
+parser.add_argument('--subj_id', default=0, type=int)
+parser.add_argument('--B', default=10, type=int)
+parser.add_argument('--penalty', default=3, type=int)
+parser.add_argument('--add_query_indicator', default=1, type=int)
+parser.add_argument('--add_condition_label', default=0, type=int)
+parser.add_argument('--gating_type', default='post', type=str)
+parser.add_argument('--n_hidden', default=128, type=int)
+parser.add_argument('--lr', default=1e-3, type=float)
+parser.add_argument('--cmpt', default=.8, type=float)
+parser.add_argument('--eta', default=.1, type=float)
+parser.add_argument('--n_epochs', default=100)
+parser.add_argument('--sup_epoch', default=0)
+parser.add_argument('--test_mode', default=1)
+parser.add_argument('--exp_name', default='testing', type=str)
+parser.add_argument('--log_root', default='../log', type=str)
+args = parser.parse_args()
+print(args)
+
+'''params for the model'''
+
+# training param
+subj_id = args.subj_id
+B = args.B
+penalty = args.penalty
+add_query_indicator = bool(args.add_query_indicator)
+add_condition_label = bool(args.add_condition_label)
+gating_type = args.gating_type
+n_hidden = args.n_hidden
+lr = args.lr
+cmpt = args.cmpt
+eta = args.eta
+n_epochs = args.n_epochs
+sup_epoch = args.sup_epoch
+test_mode = bool(args.test_mode)
+exp_name = args.exp_name
+log_root = args.log_root
 
 
 '''init params'''
 # env param
+exp_name = 'testing'
+log_root = '../log'
 subj_id = 0
 B = 10
-penalty = 4
-# model param
+penalty = 6
 add_query_indicator = True
 add_condition_label = False
 gating_type = 'post'
-n_hidden = 133
+n_hidden = 128
 lr = 1e-3
-cmpt = .9
+cmpt = .8
 eta = 0.1
-# training param
-n_epochs = 5000
+n_epochs = 10000
 sup_epoch = 0
 test_mode = True
+
 # save all params
 p = P(
     subj_id=subj_id, B = B, penalty = penalty, n_hidden = n_hidden, lr = lr, cmpt = cmpt,
     eta = eta, test_mode = test_mode, add_query_indicator = add_query_indicator,
-    gating_type = gating_type, n_epochs = n_epochs, sup_epoch = sup_epoch
+    gating_type = gating_type, n_epochs = n_epochs, sup_epoch = sup_epoch, exp_name=exp_name
 )
 p.gen_log_dirs()
 '''init model and task'''
@@ -51,8 +93,9 @@ agent = Agent(
     dec_hidden_dim=n_hidden//2, dict_len=2, cmpt=cmpt,
     add_query_indicator=add_query_indicator, add_condition_label=add_condition_label
 )
-optimizer_sup = torch.optim.Adam(agent.parameters(), lr=lr)
-optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr)
+# optimizer_sup = torch.optim.Adam(agent.parameters(), lr=lr)
+optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
+# scheduler = ConstantLR(optimizer, factor=1/3, total_iters=3000, verbose=True)
 
 '''parameters for keep training, will be skipped if the sim is new'''
 if p.log_dir_exists() and ckpt_exists(p.log_dir):
@@ -66,8 +109,8 @@ if p.log_dir_exists() and ckpt_exists(p.log_dir):
     # learning = False
     epoch_loaded = get_max_epoch_saved(p.log_dir)
     # epoch_loaded = 13999
-    agent, optimizer = load_ckpt(epoch_loaded, p.log_dir, agent, optimizer_rl)
-    optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr_kt)
+    agent, _ = load_ckpt(epoch_loaded, p.log_dir, agent, optimizer)
+    optimizer = torch.optim.Adam(agent.parameters(), lr=lr_kt)
     epoch_loaded += 1
     n_epochs = n_epochs_kt
 else:
@@ -76,7 +119,7 @@ else:
     learning = True
 
 '''train the model'''
-def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
+def run_exp2(n_epochs, epoch_loaded=0, learning=True):
 
     log_sf_ids = np.zeros((n_epochs, exp.n_trios))
     log_trial_types = [None] * n_epochs
@@ -117,7 +160,7 @@ def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
                         agent.encoding_off()
                     # forward
                     pi_a_t, v_t, hc_t, cache_t = agent(
-                        X[j][k][t], hc_t, condition_label = log_trial_types[i][j]
+                        X[j][k][t], hc_t, mem_sig = ground_truth_mem_sig(log_trial_types[i][j], t, k)
                     )
                     a_t, p_a_t = agent.pick_action(pi_a_t)
                     r_t = get_reward(a_t, X[j][k][t], Y[j][k][t], penalty)
@@ -139,30 +182,26 @@ def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
 
                 if learning:
                     # update weights
-                    if i < sup_epoch:
-                        optimizer_sup.zero_grad()
-                        loss_sup.backward()
-                        optimizer_sup.step()
-                    else:
-                        loss_rl = loss_actor + loss_critic - pi_ent * eta
-                        optimizer_rl.zero_grad()
-                        loss_rl.backward()
-                        optimizer_rl.step()
+                    loss_rl = loss_actor + loss_critic - pi_ent * eta
+                    optimizer.zero_grad()
+                    loss_rl.backward()
+                    optimizer.step()
 
                 # log info
-                log_loss_s[i,j,k] = loss_sup
-                log_loss_a[i,j,k], log_loss_c[i,j,k] = loss_actor, loss_critic
+                log_loss_s[i,j,k] = loss_sup.clone().detach()
+                log_loss_a[i,j,k], log_loss_c[i,j,k] = loss_actor.clone().detach(), loss_critic.clone().detach()
                 log_return[i,j,k] = torch.stack(agent.rewards).sum()
 
             # at the end of 3 trio
             agent.flush_episodic_memory()
 
         # at the end of an epoch
+        # scheduler.step()
         info_i = (i + epoch_loaded, log_loss_a[i].mean(), log_loss_c[i].mean(), log_return[i].mean())
         print(f'%3d | L: a: %.2f, c: %.2f | R : %.2f' % info_i)
         # save weights for every other 1000 epochs
         if (i+1) % 1000 == 0 and learning:
-            save_ckpt(i + epoch_loaded, p.log_dir, agent, optimizer_rl, verbose=True)
+            save_ckpt(i + epoch_loaded, p.log_dir, agent, optimizer, verbose=True)
 
     # done training, pack results
     log_info = [
@@ -181,7 +220,7 @@ def run_exp2(n_epochs, sup_epoch=0, epoch_loaded=0, learning=True):
     return log_info
 
 # run the training scirpts
-log_info = run_exp2(n_epochs, sup_epoch, epoch_loaded=epoch_loaded, learning=learning)
+log_info = run_exp2(n_epochs, epoch_loaded=epoch_loaded, learning=learning)
 [
     log_sf_ids,
     log_trial_types,
@@ -232,8 +271,6 @@ log_info = run_exp2(n_epochs, sup_epoch, epoch_loaded=epoch_loaded, learning=lea
 #     ax.set_ylabel(title)
 #     f.tight_layout()
 #     sns.despine()
-#     if sup_epoch < n_epochs:
-#         ax.axvline(sup_epoch, linestyle='--', color='red', label='start RL training')
 #     return f, ax
 #
 # epoch_save = n_epochs + epoch_loaded
@@ -380,7 +417,7 @@ log_info = run_exp2(n_epochs, sup_epoch, epoch_loaded=epoch_loaded, learning=lea
 # log_tq_ma_hd_mu, log_tq_ma_hd_se = compute_stats(log_tq_ma_hd, axis=0)
 # f, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
 # axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,0], yerr=log_tq_ma_ld_se[:,0], color=c_pal[3], label = 'targ')
-# axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,1], yerr=log_tq_ma_ld_mu[:,1], color=c_pal[2], label = 'lure')
+# axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,1], yerr=log_tq_ma_ld_se[:,1], color=c_pal[2], label = 'lure')
 # axes[0].set_title('low d')
 # f.legend()
 # axes[1].errorbar(x=x_, y=log_tq_ma_hd_mu[:,0], yerr=log_tq_ma_hd_se[:,0], color=c_pal[3], label = 'targ')
