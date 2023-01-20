@@ -57,23 +57,23 @@ exp_name = args.exp_name
 log_root = args.log_root
 
 
-'''init params'''
-# env param
-exp_name = 'testing'
-log_root = '../log'
-subj_id = 0
-B = 10
-penalty = 6
-add_query_indicator = True
-add_condition_label = False
-gating_type = 'post'
-n_hidden = 128
-lr = 1e-3
-cmpt = .8
-eta = 0.1
-n_epochs = 10000
-sup_epoch = 0
-test_mode = True
+# '''init params'''
+# # env param
+# exp_name = 'testing'
+# log_root = '../log'
+# subj_id = 0
+# B = 10
+# penalty = 6
+# add_query_indicator = True
+# add_condition_label = False
+# gating_type = 'post'
+# n_hidden = 128
+# lr = 1e-3
+# cmpt = .8
+# eta = 0.1
+# n_epochs = 10000
+# sup_epoch = 0
+# test_mode = True
 
 # save all params
 p = P(
