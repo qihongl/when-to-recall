@@ -19,65 +19,65 @@ from utils.utils import to_sqnp, to_np, init_lll, save_ckpt, load_ckpt, \
 
 sns.set(style='white', palette='colorblind', context='poster')
 
-# matplotlib.use('Agg')
-# parser = argparse.ArgumentParser()
-# parser.add_argument('--subj_id', default=0, type=int)
-# parser.add_argument('--B', default=10, type=int)
-# parser.add_argument('--penalty', default=6, type=int)
-# parser.add_argument('--add_query_indicator', default=1, type=int)
-# parser.add_argument('--add_condition_label', default=0, type=int)
-# parser.add_argument('--gating_type', default='post', type=str)
-# parser.add_argument('--n_hidden', default=128, type=int)
-# parser.add_argument('--lr', default=1e-3, type=float)
-# parser.add_argument('--cmpt', default=.8, type=float)
-# parser.add_argument('--eta', default=.1, type=float)
-# parser.add_argument('--n_epochs', default=15000, type=int)
-# parser.add_argument('--sup_epoch', default=0, type=int)
-# parser.add_argument('--test_mode', default=1, type=int)
-# parser.add_argument('--exp_name', default='testing', type=str)
-# parser.add_argument('--log_root', default='../log', type=str)
-# args = parser.parse_args()
-# print(args)
-#
-# '''params for the model'''
-#
-# # training param
-# subj_id = args.subj_id
-# B = args.B
-# penalty = args.penalty
-# add_query_indicator = bool(args.add_query_indicator)
-# add_condition_label = bool(args.add_condition_label)
-# gating_type = args.gating_type
-# n_hidden = args.n_hidden
-# lr = args.lr
-# cmpt = args.cmpt
-# eta = args.eta
-# n_epochs = args.n_epochs
-# sup_epoch = args.sup_epoch
-# test_mode = bool(args.test_mode)
-# exp_name = args.exp_name
-# log_root = args.log_root
-#
+matplotlib.use('Agg')
+parser = argparse.ArgumentParser()
+parser.add_argument('--subj_id', default=0, type=int)
+parser.add_argument('--B', default=10, type=int)
+parser.add_argument('--penalty', default=6, type=int)
+parser.add_argument('--add_query_indicator', default=1, type=int)
+parser.add_argument('--add_condition_label', default=0, type=int)
+parser.add_argument('--gating_type', default='post', type=str)
+parser.add_argument('--n_hidden', default=128, type=int)
+parser.add_argument('--lr', default=1e-3, type=float)
+parser.add_argument('--cmpt', default=.8, type=float)
+parser.add_argument('--eta', default=.1, type=float)
+parser.add_argument('--n_epochs', default=15000, type=int)
+parser.add_argument('--sup_epoch', default=0, type=int)
+parser.add_argument('--test_mode', default=1, type=int)
+parser.add_argument('--exp_name', default='testing', type=str)
+parser.add_argument('--log_root', default='../log', type=str)
+args = parser.parse_args()
+print(args)
 
-'''init params'''
-# env param
-subj_id = 0
-B = 10
-penalty = 6
-# model param
-add_query_indicator = True
-add_condition_label = False
-gating_type = 'post'
-n_hidden = 128
-lr = 1e-3
-cmpt = .8
-eta = 0.1
+'''params for the model'''
+
 # training param
-n_epochs = 1001
-sup_epoch = 0
-test_mode = True
-exp_name = 'testing'
-log_root = '../log'
+subj_id = args.subj_id
+B = args.B
+penalty = args.penalty
+add_query_indicator = bool(args.add_query_indicator)
+add_condition_label = bool(args.add_condition_label)
+gating_type = args.gating_type
+n_hidden = args.n_hidden
+lr = args.lr
+cmpt = args.cmpt
+eta = args.eta
+n_epochs = args.n_epochs
+sup_epoch = args.sup_epoch
+test_mode = bool(args.test_mode)
+exp_name = args.exp_name
+log_root = args.log_root
+
+
+# '''init params'''
+# # env param
+# subj_id = 0
+# B = 10
+# penalty = 6
+# # model param
+# add_query_indicator = True
+# add_condition_label = False
+# gating_type = 'post'
+# n_hidden = 128
+# lr = 1e-3
+# cmpt = .8
+# eta = 0.1
+# # training param
+# n_epochs = 1001
+# sup_epoch = 0
+# test_mode = True
+# exp_name = 'testing'
+# log_root = '../log'
 
 # save all params
 p = P(
@@ -99,7 +99,7 @@ agent = Agent(
 )
 # optimizer_sup = torch.optim.Adam(agent.parameters(), lr=lr)
 optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
-scheduler = StepLR(optimizer, step_size=3000, gamma=.333, verbose=False)
+scheduler = StepLR(optimizer, step_size=3000, gamma=.333)
 
 
 '''parameters for keep training, will be skipped if the sim is new'''
