@@ -83,7 +83,7 @@ log_root = args.log_root
 p = P(
     subj_id=subj_id, B = B, penalty = penalty, n_hidden = n_hidden, lr = lr, cmpt = cmpt,
     eta = eta, test_mode = test_mode, add_query_indicator = add_query_indicator,
-    gating_type = gating_type, n_epochs = n_epochs, sup_epoch = sup_epoch, exp_name=exp_name
+    gating_type = gating_type, n_epochs = n_epochs, sup_epoch = sup_epoch, exp_name=exp_name, log_root=log_root
 )
 p.gen_log_dirs()
 '''init model and task'''
