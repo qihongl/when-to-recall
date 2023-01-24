@@ -30,7 +30,7 @@ lr = 1e-3
 cmpt = .8
 eta = 0.1
 # training param
-n_epochs = 10000
+n_epochs = 15000
 sup_epoch = 0
 test_mode = True
 
@@ -56,7 +56,7 @@ optimizer_sup = torch.optim.Adam(agent.parameters(), lr=lr)
 optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr)
 
 '''load model '''
-n_epochs_kt = 200
+n_epochs_kt = 100
 lr_kt = 0
 learning = False
 epoch_loaded = get_max_epoch_saved(p.log_dir)

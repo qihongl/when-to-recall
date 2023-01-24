@@ -1,10 +1,12 @@
 import os
 import torch
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch.nn.functional as F
 import argparse
+from torch.optim.lr_scheduler import StepLR
 # from torch.optim.lr_scheduler import ConstantLR
 from task import SimpleExp2
 from task import get_reward, ground_truth_mem_sig
@@ -18,62 +20,64 @@ from utils.utils import to_sqnp, to_np, init_lll, save_ckpt, load_ckpt, \
 sns.set(style='white', palette='colorblind', context='poster')
 
 # matplotlib.use('Agg')
-parser = argparse.ArgumentParser()
-parser.add_argument('--subj_id', default=0, type=int)
-parser.add_argument('--B', default=10, type=int)
-parser.add_argument('--penalty', default=3, type=int)
-parser.add_argument('--add_query_indicator', default=1, type=int)
-parser.add_argument('--add_condition_label', default=0, type=int)
-parser.add_argument('--gating_type', default='post', type=str)
-parser.add_argument('--n_hidden', default=128, type=int)
-parser.add_argument('--lr', default=1e-3, type=float)
-parser.add_argument('--cmpt', default=.8, type=float)
-parser.add_argument('--eta', default=.1, type=float)
-parser.add_argument('--n_epochs', default=100, type=int)
-parser.add_argument('--sup_epoch', default=0, type=int)
-parser.add_argument('--test_mode', default=1, type=int)
-parser.add_argument('--exp_name', default='testing', type=str)
-parser.add_argument('--log_root', default='../log', type=str)
-args = parser.parse_args()
-print(args)
+# parser = argparse.ArgumentParser()
+# parser.add_argument('--subj_id', default=0, type=int)
+# parser.add_argument('--B', default=10, type=int)
+# parser.add_argument('--penalty', default=6, type=int)
+# parser.add_argument('--add_query_indicator', default=1, type=int)
+# parser.add_argument('--add_condition_label', default=0, type=int)
+# parser.add_argument('--gating_type', default='post', type=str)
+# parser.add_argument('--n_hidden', default=128, type=int)
+# parser.add_argument('--lr', default=1e-3, type=float)
+# parser.add_argument('--cmpt', default=.8, type=float)
+# parser.add_argument('--eta', default=.1, type=float)
+# parser.add_argument('--n_epochs', default=15000, type=int)
+# parser.add_argument('--sup_epoch', default=0, type=int)
+# parser.add_argument('--test_mode', default=1, type=int)
+# parser.add_argument('--exp_name', default='testing', type=str)
+# parser.add_argument('--log_root', default='../log', type=str)
+# args = parser.parse_args()
+# print(args)
+#
+# '''params for the model'''
+#
+# # training param
+# subj_id = args.subj_id
+# B = args.B
+# penalty = args.penalty
+# add_query_indicator = bool(args.add_query_indicator)
+# add_condition_label = bool(args.add_condition_label)
+# gating_type = args.gating_type
+# n_hidden = args.n_hidden
+# lr = args.lr
+# cmpt = args.cmpt
+# eta = args.eta
+# n_epochs = args.n_epochs
+# sup_epoch = args.sup_epoch
+# test_mode = bool(args.test_mode)
+# exp_name = args.exp_name
+# log_root = args.log_root
+#
 
-'''params for the model'''
-
+'''init params'''
+# env param
+subj_id = 0
+B = 10
+penalty = 6
+# model param
+add_query_indicator = True
+add_condition_label = False
+gating_type = 'post'
+n_hidden = 128
+lr = 1e-3
+cmpt = .8
+eta = 0.1
 # training param
-subj_id = args.subj_id
-B = args.B
-penalty = args.penalty
-add_query_indicator = bool(args.add_query_indicator)
-add_condition_label = bool(args.add_condition_label)
-gating_type = args.gating_type
-n_hidden = args.n_hidden
-lr = args.lr
-cmpt = args.cmpt
-eta = args.eta
-n_epochs = args.n_epochs
-sup_epoch = args.sup_epoch
-test_mode = bool(args.test_mode)
-exp_name = args.exp_name
-log_root = args.log_root
-
-
-# '''init params'''
-# # env param
-# exp_name = 'testing'
-# log_root = '../log'
-# subj_id = 0
-# B = 10
-# penalty = 6
-# add_query_indicator = True
-# add_condition_label = False
-# gating_type = 'post'
-# n_hidden = 128
-# lr = 1e-3
-# cmpt = .8
-# eta = 0.1
-# n_epochs = 10000
-# sup_epoch = 0
-# test_mode = True
+n_epochs = 1001
+sup_epoch = 0
+test_mode = True
+exp_name = 'testing'
+log_root = '../log'
 
 # save all params
 p = P(
@@ -95,7 +99,8 @@ agent = Agent(
 )
 # optimizer_sup = torch.optim.Adam(agent.parameters(), lr=lr)
 optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
-# scheduler = ConstantLR(optimizer, factor=1/3, total_iters=3000, verbose=True)
+scheduler = StepLR(optimizer, step_size=3000, gamma=.333, verbose=False)
+
 
 '''parameters for keep training, will be skipped if the sim is new'''
 if p.log_dir_exists() and ckpt_exists(p.log_dir):
@@ -104,9 +109,9 @@ if p.log_dir_exists() and ckpt_exists(p.log_dir):
     lr_kt = 1e-4
     learning = True
     # # just testing
-    # n_epochs_kt = 300
-    # lr_kt = 0
-    # learning = False
+    n_epochs_kt = 100
+    lr_kt = 0
+    learning = False
     epoch_loaded = get_max_epoch_saved(p.log_dir)
     # epoch_loaded = 13999
     agent, _ = load_ckpt(epoch_loaded, p.log_dir, agent, optimizer)
@@ -196,12 +201,13 @@ def run_exp2(n_epochs, epoch_loaded=0, learning=True):
             agent.flush_episodic_memory()
 
         # at the end of an epoch
-        # scheduler.step()
         info_i = (i + epoch_loaded, log_loss_a[i].mean(), log_loss_c[i].mean(), log_return[i].mean())
         print(f'%3d | L: a: %.2f, c: %.2f | R : %.2f' % info_i)
         # save weights for every other 1000 epochs
         if (i+1) % 1000 == 0 and learning:
             save_ckpt(i + epoch_loaded, p.log_dir, agent, optimizer, verbose=True)
+        if learning:
+            scheduler.step()
 
     # done training, pack results
     log_info = [
@@ -220,7 +226,10 @@ def run_exp2(n_epochs, epoch_loaded=0, learning=True):
     return log_info
 
 # run the training scirpts
-log_info = run_exp2(n_epochs, epoch_loaded=epoch_loaded, learning=learning)
+_ = run_exp2(n_epochs, epoch_loaded=epoch_loaded, learning=learning)
+
+n_epochs = 100
+log_info = run_exp2(n_epochs, learning=False)
 [
     log_sf_ids,
     log_trial_types,
@@ -235,199 +244,200 @@ log_info = run_exp2(n_epochs, epoch_loaded=epoch_loaded, learning=learning)
     log_tq_ma,
 ] = log_info
 
-# '''preproc the results'''
-#
-# def get_within_trial_query_mean(log_info):
-#     wtq_acc = np.zeros((n_epochs, exp.n_trios, 2))
-#     for i in range(n_epochs):
-#         for j in range(exp.n_trios):
-#             # get the last time point for the 1st two trios
-#             wtq_acc[i,j] = [log_info[i][j][k][-1] for k in range(2)]
-#     return np.mean(wtq_acc,axis=-1)
-#
-# def get_test_query_mean(log_info):
-#     n_queries = 3
-#     tq_acc = np.zeros((n_epochs, exp.n_trios, n_queries))
-#     for i in range(n_epochs):
-#         for j in range(exp.n_trios):
-#             tq_acc[i,j] = [log_info[i][j][-1][ii] for ii in [2,4,6]]
-#     return tq_acc
-#
-# def get_copy_mean(log_info):
-#     cp_acc = np.zeros((n_epochs, exp.n_trios, 2, exp.T))
-#     for i in range(n_epochs):
-#         for j in range(exp.n_trios):
-#             for k in range(2):
-#                 cp_acc[i,j] = log_info[i][j][k][:exp.T]
-#     return np.mean(np.mean(cp_acc,axis=-1),axis=-1)
-#
-#
-# '''plot the results'''
-# def plot_learning_curve(title, data):
-#     f, ax = plt.subplots(1,1, figsize=(8,5))
-#     lc_data = [data[i].mean() for i in range(n_epochs)]
-#     ax.plot(lc_data)
-#     ax.set_xlabel('Epochs')
-#     ax.set_ylabel(title)
-#     f.tight_layout()
-#     sns.despine()
-#     return f, ax
-#
-# epoch_save = n_epochs + epoch_loaded
-#
-# f, ax = plot_learning_curve('Cumulative R', log_return)
-# fig_path = os.path.join(p.log_dir, f'lr-r-ep-{epoch_save}.png')
-# f.savefig(fig_path, dpi=100)
-# f, ax = plot_learning_curve('Loss - actor', log_loss_a)
-# fig_path = os.path.join(p.log_dir, f'lr-a-ep-{epoch_save}.png')
-# f.savefig(fig_path, dpi=100)
-# f, ax = plot_learning_curve('Loss - critic', log_loss_c)
-# fig_path = os.path.join(p.log_dir, f'lr-c-ep-{epoch_save}.png')
-# f.savefig(fig_path, dpi=100)
-#
-#
-# chance = 1 / exp.B
-# wtq_acc = get_within_trial_query_mean(log_acc)
-# f, ax = plot_learning_curve('Within trial query acc', wtq_acc)
-# ax.axhline(chance, linestyle='--', color='grey', label='chance')
-# ax.legend()
-# fig_path = os.path.join(p.log_dir, f'lr-wtq-acc-ep-{epoch_save}.png')
-# f.savefig(fig_path, dpi=100)
-#
-#
-# tq_acc = get_test_query_mean(log_acc)
-# f, ax = plot_learning_curve('Test query acc', np.mean(tq_acc,axis=-1))
-# ax.axhline(chance, linestyle='--', color='grey', label='chance')
-# ax.legend()
-# fig_path = os.path.join(p.log_dir, f'lr-tq-acc-ep-{epoch_save}.png')
-# f.savefig(fig_path, dpi=100)
-#
-# cp_acc = get_copy_mean(log_acc)
-# f, ax = plot_learning_curve('Copy acc', np.mean(cp_acc,axis=-1))
-# ax.axhline(chance, linestyle='--', color='grey', label='chance')
-# ax.legend()
-# fig_path = os.path.join(p.log_dir, f'lr-cp-acc-ep-{epoch_save}.png')
-# f.savefig(fig_path, dpi=100)
-#
-#
-#
-# wtq_dk = get_within_trial_query_mean(log_dk)
-# f, ax = plot_learning_curve('Within trial query, p(dk)', wtq_dk)
-# ax.set_ylim([-.05,1.05])
-# ax.legend()
-# fig_path = os.path.join(p.log_dir, f'pdk-wtq-ep-{epoch_save}.png')
-# f.savefig(fig_path, dpi=100)
-#
-#
-# tq_dk = get_test_query_mean(log_dk)
-# f, ax = plot_learning_curve('Test query, p(dk)', np.mean(tq_dk,axis=-1))
-# ax.set_ylim([-.05,1.05])
-# ax.legend()
-# fig_path = os.path.join(p.log_dir, f'pdk-tq-ep-{epoch_save}.png')
-# f.savefig(fig_path, dpi=100)
-#
-#
-# cp_dk = get_copy_mean(log_dk)
-# f, ax = plot_learning_curve('Copy, p(dk)', np.mean(cp_dk,axis=-1))
-# ax.set_ylim([-.05,1.05])
-# ax.legend()
-# fig_path = os.path.join(p.log_dir, f'pdk-cp-ep-{epoch_save}.png')
-# f.savefig(fig_path, dpi=100)
-#
-# '''analyze the results at the end of training '''
-# # num of epochs to analyze
-# npa = 200
-#
-# # reformat data
-# tq_dk_rs = np.reshape(tq_dk[-npa:], (-1, 3))
-# tq_acc_rs = np.reshape(tq_acc[-npa:], (-1, 3))
-# log_trial_types_rs = np.reshape(log_trial_types[-npa:], (-1))
-# # split data according to condition
-# hd = log_trial_types_rs == 'high d'
-# ld = log_trial_types_rs == 'low d'
-# tq_acc_rs_hd_mu, tq_acc_rs_hd_se = compute_stats(tq_acc_rs[hd],axis=0)
-# tq_acc_rs_ld_mu, tq_acc_rs_ld_se = compute_stats(tq_acc_rs[ld],axis=0)
-# tq_dk_rs_hd_mu, tq_dk_rs_hd_se = compute_stats(tq_dk_rs[hd],axis=0)
-# tq_dk_rs_ld_mu, tq_dk_rs_ld_se = compute_stats(tq_dk_rs[ld],axis=0)
-# tq_er_rs = np.logical_and(np.logical_not(tq_acc_rs), np.logical_not(tq_dk_rs))
-# tq_er_rs_hd_mu, tq_er_rs_hd_se = compute_stats(tq_er_rs[hd],axis=0)
-# tq_er_rs_ld_mu, tq_er_rs_ld_se = compute_stats(tq_er_rs[ld],axis=0)
-#
-# # plot behavioral performance
-# c_pal = sns.color_palette('colorblind', n_colors=4)
-# alpha = .3
-# x_ = np.arange(3) # there are 3 query time points
-# ones = np.ones_like(x_)
-# f, axes = plt.subplots(1, 3, figsize=(14, 5), sharey=True)
-#
-# axes[0].errorbar(x=x_, y=tq_acc_rs_hd_mu, yerr=tq_acc_rs_hd_se, color=c_pal[3])
-# axes[0].errorbar(x=x_, y=tq_acc_rs_ld_mu, yerr=tq_acc_rs_ld_se, color=c_pal[0])
-# axes[0].set_title('correct')
-# axes[1].errorbar(x=x_, y=tq_dk_rs_hd_mu, yerr=tq_dk_rs_hd_se, color=c_pal[3])
-# axes[1].errorbar(x=x_, y=tq_dk_rs_ld_mu, yerr=tq_dk_rs_ld_se, color=c_pal[0])
-# axes[1].set_title('dont know')
-# axes[2].errorbar(x=x_, y=tq_er_rs_hd_mu, yerr=tq_er_rs_hd_se, color=c_pal[3])
-# axes[2].errorbar(x=x_, y=tq_er_rs_ld_mu, yerr=tq_er_rs_ld_se, color=c_pal[0])
-# axes[2].set_title('incorrect')
-#
-# for ax in axes:
-#     ax.set_ylabel('Frequency')
-#     ax.set_xlabel('Test query position')
-#     ax.set_xticks(x_)
-#     ax.set_xticklabels(x_+2)
-#     ax.set_ylim([-.05, 1.05])
-# axes[0].axhline(chance, ls='--', color='grey')
-# f.legend(['chance', 'high d', 'low d'], loc=(.51,.5))
-# sns.despine()
-# f.tight_layout()
-# fig_path = os.path.join(p.log_dir, f'performance-ep-{epoch_save}.png')
-# f.savefig(fig_path, dpi=100)
-#
-#
-# '''analyze recall'''
-# # re-format
-# log_tq_emg = to_sqnp(log_tq_emg)
-# log_tq_ma = to_sqnp(log_tq_ma)
-# # split data according to condition
-# log_tq_emg_ld = log_tq_emg[np.array(log_trial_types)=='low d']
-# log_tq_emg_hd = log_tq_emg[np.array(log_trial_types)=='high d']
-# log_tq_ma_ld = log_tq_ma[np.array(log_trial_types)=='low d']
-# log_tq_ma_hd = log_tq_ma[np.array(log_trial_types)=='high d']
-#
-# # plot em gate
-# log_tq_emg_ld_mu, log_tq_emg_ld_se = compute_stats(log_tq_emg_ld,axis=0)
-# log_tq_emg_hd_mu, log_tq_emg_hd_se = compute_stats(log_tq_emg_hd,axis=0)
-#
-# f, ax = plt.subplots(1, 1, figsize=(8, 5), sharey=True)
-# x_ = np.arange(exp.T_test)
-# x_ticklabels = ['0', '1', '2-q', '2-o', '3-q', '3-o', '4-q', '4-o']
-# ax.errorbar(x=x_, y=log_tq_emg_ld_mu, yerr=log_tq_emg_ld_se, color=c_pal[3])
-# ax.errorbar(x=x_, y=log_tq_emg_hd_mu, yerr=log_tq_emg_hd_se, color=c_pal[0])
-# ax.set_ylabel('EM gate')
-# ax.set_xticks(x_)
-# ax.set_xticklabels(x_ticklabels)
-# f.legend(['high d', 'low d'])
-# sns.despine()
-# f.tight_layout()
-# fig_path = os.path.join(p.log_dir, f'emgate-ep-{epoch_save}.png')
-# f.savefig(fig_path, dpi=100)
-#
-# # plot memory activation
-# log_tq_ma_ld_mu, log_tq_ma_ld_se = compute_stats(log_tq_ma_ld, axis=0)
-# log_tq_ma_hd_mu, log_tq_ma_hd_se = compute_stats(log_tq_ma_hd, axis=0)
-# f, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
-# axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,0], yerr=log_tq_ma_ld_se[:,0], color=c_pal[3], label = 'targ')
-# axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,1], yerr=log_tq_ma_ld_se[:,1], color=c_pal[2], label = 'lure')
-# axes[0].set_title('low d')
-# f.legend()
-# axes[1].errorbar(x=x_, y=log_tq_ma_hd_mu[:,0], yerr=log_tq_ma_hd_se[:,0], color=c_pal[3], label = 'targ')
-# axes[1].errorbar(x=x_, y=log_tq_ma_hd_mu[:,1], yerr=log_tq_ma_hd_mu[:,1], color=c_pal[2], label = 'lure')
-# axes[1].set_title('high d')
-# axes[0].set_ylabel('Memory activation')
-# for ax in axes:
-#     ax.set_xticks(x_)
-#     ax.set_xticklabels(x_ticklabels)
-# sns.despine()
-# f.tight_layout()
-# fig_path = os.path.join(p.log_dir, f'mem-act-ep-{epoch_save}.png')
-# f.savefig(fig_path, dpi=100)
+'''preproc the results'''
+
+def get_within_trial_query_mean(log_info):
+    wtq_acc = np.zeros((n_epochs, exp.n_trios, 2))
+    for i in range(n_epochs):
+        for j in range(exp.n_trios):
+            # get the last time point for the 1st two trios
+            wtq_acc[i,j] = [log_info[i][j][k][-1] for k in range(2)]
+    return np.mean(wtq_acc,axis=-1)
+
+def get_test_query_mean(log_info):
+    n_queries = 3
+    tq_acc = np.zeros((n_epochs, exp.n_trios, n_queries))
+    for i in range(n_epochs):
+        for j in range(exp.n_trios):
+            tq_acc[i,j] = [log_info[i][j][-1][ii] for ii in [2,4,6]]
+    return tq_acc
+
+def get_copy_mean(log_info):
+    cp_acc = np.zeros((n_epochs, exp.n_trios, 2, exp.T))
+    for i in range(n_epochs):
+        for j in range(exp.n_trios):
+            for k in range(2):
+                cp_acc[i,j] = log_info[i][j][k][:exp.T]
+    return np.mean(np.mean(cp_acc,axis=-1),axis=-1)
+
+
+'''plot the results'''
+def plot_learning_curve(title, data):
+    f, ax = plt.subplots(1,1, figsize=(8,5))
+    lc_data = [data[i].mean() for i in range(n_epochs)]
+    ax.plot(lc_data)
+    ax.set_xlabel('Epochs')
+    ax.set_ylabel(title)
+    f.tight_layout()
+    sns.despine()
+    return f, ax
+
+epoch_save = n_epochs + epoch_loaded
+
+f, ax = plot_learning_curve('Cumulative R', log_return)
+fig_path = os.path.join(p.log_dir, f'lr-r-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)
+f, ax = plot_learning_curve('Loss - actor', log_loss_a)
+fig_path = os.path.join(p.log_dir, f'lr-a-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)
+f, ax = plot_learning_curve('Loss - critic', log_loss_c)
+fig_path = os.path.join(p.log_dir, f'lr-c-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)
+
+
+chance = 1 / exp.B
+wtq_acc = get_within_trial_query_mean(log_acc)
+f, ax = plot_learning_curve('Within trial query acc', wtq_acc)
+ax.axhline(chance, linestyle='--', color='grey', label='chance')
+ax.legend()
+fig_path = os.path.join(p.log_dir, f'lr-wtq-acc-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)
+
+
+tq_acc = get_test_query_mean(log_acc)
+f, ax = plot_learning_curve('Test query acc', np.mean(tq_acc,axis=-1))
+ax.axhline(chance, linestyle='--', color='grey', label='chance')
+ax.legend()
+fig_path = os.path.join(p.log_dir, f'lr-tq-acc-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)
+
+cp_acc = get_copy_mean(log_acc)
+f, ax = plot_learning_curve('Copy acc', np.mean(cp_acc,axis=-1))
+ax.axhline(chance, linestyle='--', color='grey', label='chance')
+ax.legend()
+fig_path = os.path.join(p.log_dir, f'lr-cp-acc-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)
+
+
+
+wtq_dk = get_within_trial_query_mean(log_dk)
+f, ax = plot_learning_curve('Within trial query, p(dk)', wtq_dk)
+ax.set_ylim([-.05,1.05])
+ax.legend()
+fig_path = os.path.join(p.log_dir, f'pdk-wtq-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)
+
+
+tq_dk = get_test_query_mean(log_dk)
+f, ax = plot_learning_curve('Test query, p(dk)', np.mean(tq_dk,axis=-1))
+ax.set_ylim([-.05,1.05])
+ax.legend()
+fig_path = os.path.join(p.log_dir, f'pdk-tq-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)
+
+
+cp_dk = get_copy_mean(log_dk)
+f, ax = plot_learning_curve('Copy, p(dk)', np.mean(cp_dk,axis=-1))
+ax.set_ylim([-.05,1.05])
+ax.legend()
+fig_path = os.path.join(p.log_dir, f'pdk-cp-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)
+
+'''analyze the results at the end of training '''
+# num of epochs to analyze
+npa = n_epochs_test
+
+# reformat data
+tq_dk_rs = np.reshape(tq_dk[-npa:], (-1, 3))
+tq_acc_rs = np.reshape(tq_acc[-npa:], (-1, 3))
+log_trial_types_rs = np.reshape(log_trial_types[-npa:], (-1))
+# split data according to condition
+hd = log_trial_types_rs == 'high d'
+ld = log_trial_types_rs == 'low d'
+tq_acc_rs_hd_mu, tq_acc_rs_hd_se = compute_stats(tq_acc_rs[hd],axis=0)
+tq_acc_rs_ld_mu, tq_acc_rs_ld_se = compute_stats(tq_acc_rs[ld],axis=0)
+tq_dk_rs_hd_mu, tq_dk_rs_hd_se = compute_stats(tq_dk_rs[hd],axis=0)
+tq_dk_rs_ld_mu, tq_dk_rs_ld_se = compute_stats(tq_dk_rs[ld],axis=0)
+tq_er_rs = np.logical_and(np.logical_not(tq_acc_rs), np.logical_not(tq_dk_rs))
+tq_er_rs_hd_mu, tq_er_rs_hd_se = compute_stats(tq_er_rs[hd],axis=0)
+tq_er_rs_ld_mu, tq_er_rs_ld_se = compute_stats(tq_er_rs[ld],axis=0)
+
+# plot behavioral performance
+c_pal = sns.color_palette('colorblind', n_colors=4)
+alpha = .3
+x_ = np.arange(3) # there are 3 query time points
+ones = np.ones_like(x_)
+f, axes = plt.subplots(1, 3, figsize=(14, 5), sharey=True)
+
+axes[0].errorbar(x=x_, y=tq_acc_rs_hd_mu, yerr=tq_acc_rs_hd_se, color=c_pal[3])
+axes[0].errorbar(x=x_, y=tq_acc_rs_ld_mu, yerr=tq_acc_rs_ld_se, color=c_pal[0])
+axes[0].set_title('correct')
+axes[1].errorbar(x=x_, y=tq_dk_rs_hd_mu, yerr=tq_dk_rs_hd_se, color=c_pal[3])
+axes[1].errorbar(x=x_, y=tq_dk_rs_ld_mu, yerr=tq_dk_rs_ld_se, color=c_pal[0])
+axes[1].set_title('dont know')
+axes[2].errorbar(x=x_, y=tq_er_rs_hd_mu, yerr=tq_er_rs_hd_se, color=c_pal[3])
+axes[2].errorbar(x=x_, y=tq_er_rs_ld_mu, yerr=tq_er_rs_ld_se, color=c_pal[0])
+axes[2].set_title('incorrect')
+
+for ax in axes:
+    ax.set_ylabel('Frequency')
+    ax.set_xlabel('Test query position')
+    ax.set_xticks(x_)
+    ax.set_xticklabels(x_+2)
+    ax.set_ylim([-.05, 1.05])
+axes[0].axhline(chance, ls='--', color='grey')
+f.legend(['chance', 'high d', 'low d'], loc=(.51,.5))
+sns.despine()
+f.tight_layout()
+fig_path = os.path.join(p.log_dir, f'performance-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)
+
+
+'''analyze recall'''
+# re-format
+log_tq_emg = to_sqnp(log_tq_emg)
+log_tq_ma = to_sqnp(log_tq_ma)
+# split data according to condition
+log_tq_emg_ld = log_tq_emg[np.array(log_trial_types)=='low d']
+log_tq_emg_hd = log_tq_emg[np.array(log_trial_types)=='high d']
+log_tq_ma_ld = log_tq_ma[np.array(log_trial_types)=='low d']
+log_tq_ma_hd = log_tq_ma[np.array(log_trial_types)=='high d']
+
+# plot em gate
+log_tq_emg_ld_mu, log_tq_emg_ld_se = compute_stats(log_tq_emg_ld, axis=0)
+log_tq_emg_hd_mu, log_tq_emg_hd_se = compute_stats(log_tq_emg_hd, axis=0)
+
+f, ax = plt.subplots(1, 1, figsize=(8, 5), sharey=True)
+x_ = np.arange(exp.T_test)
+x_ticklabels = ['0', '1', '2-q', '2-o', '3-q', '3-o', '4-q', '4-o']
+ax.errorbar(x=x_, y=log_tq_emg_ld_mu, yerr=log_tq_emg_ld_se, color=c_pal[3], label='low d')
+ax.errorbar(x=x_, y=log_tq_emg_hd_mu, yerr=log_tq_emg_hd_se, color=c_pal[0], label='high d')
+ax.set_ylabel('EM gate')
+ax.set_xticks(x_)
+ax.set_xticklabels(x_ticklabels)
+# ax.set_ylim([.9, 1.005])
+ax.legend()
+sns.despine()
+f.tight_layout()
+fig_path = os.path.join(p.log_dir, f'emgate-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)
+
+# plot memory activation
+log_tq_ma_ld_mu, log_tq_ma_ld_se = compute_stats(log_tq_ma_ld, axis=0)
+log_tq_ma_hd_mu, log_tq_ma_hd_se = compute_stats(log_tq_ma_hd, axis=0)
+f, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
+axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,0], yerr=log_tq_ma_ld_se[:,0], color=c_pal[3], label = 'targ')
+axes[0].errorbar(x=x_, y=log_tq_ma_ld_mu[:,1], yerr=log_tq_ma_ld_se[:,1], color=c_pal[2], label = 'lure')
+axes[0].set_title('low d')
+f.legend()
+axes[1].errorbar(x=x_, y=log_tq_ma_hd_mu[:,0], yerr=log_tq_ma_hd_se[:,0], color=c_pal[3], label = 'targ')
+axes[1].errorbar(x=x_, y=log_tq_ma_hd_mu[:,1], yerr=log_tq_ma_hd_se[:,1], color=c_pal[2], label = 'lure')
+axes[1].set_title('high d')
+axes[0].set_ylabel('Memory activation')
+for ax in axes:
+    ax.set_xticks(x_)
+    ax.set_xticklabels(x_ticklabels)
+sns.despine()
+f.tight_layout()
+fig_path = os.path.join(p.log_dir, f'mem-act-ep-{epoch_save}.png')
+f.savefig(fig_path, dpi=100)

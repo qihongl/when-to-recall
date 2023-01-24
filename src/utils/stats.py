@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from scipy.stats import sem
 
+
 def compute_stats(arr, axis=0, n_se=2, use_se=True):
     """compute mean and errorbar w.r.t to SE
     Parameters
@@ -29,7 +30,7 @@ def moving_average(x, winsize):
     return np.convolve(x, np.ones(winsize), 'valid') / winsize
 
 
-def entropy(probs, to_probs=False):
+def entropy(probs, to_probs=False, smallnum=1e-9):
     """calculate entropy.
     I'm using log base 2!
     Parameters
@@ -43,6 +44,7 @@ def entropy(probs, to_probs=False):
     """
     if to_probs:
         probs = to_prob_distribution(probs)
+    probs = torch.clamp(probs, min=smallnum, max=1-smallnum)
     return - torch.stack([pi * torch.log2(pi) for pi in probs]).sum()
 
 def to_prob_distribution(probs):
@@ -51,10 +53,7 @@ def to_prob_distribution(probs):
 
 if __name__ == "__main__":
     d1 = torch.Tensor([.5, .5])
-    d2 = torch.Tensor([.99, .01])
-    d3 = torch.Tensor([.5, .5])
+    d2 = torch.Tensor([1, 0])
+
     print(entropy(d1))
     print(entropy(d2))
-    print(entropy(d3))
-
-    # to_prob_distribution(torch.Tensor([1,2]))

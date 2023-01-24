@@ -301,25 +301,6 @@ class LCALSTM_after(nn.Module):
         # return loss_actor + loss_critic - pi_ent * eta
 
 
-    def pick_action(self, action_distribution):
-        """action selection by sampling from a multinomial.
-
-        Parameters
-        ----------
-        action_distribution : 1d torch.tensor
-            action distribution, pi(a|s)
-
-        Returns
-        -------
-        torch.tensor(int), torch.tensor(float)
-            sampled action, log_prob(sampled action)
-
-        """
-        m = Categorical(action_distribution)
-        a_t = m.sample()
-        log_prob_a_t = m.log_prob(a_t)
-        return a_t, log_prob_a_t
-
 
 def sample_random_vector(n_dim, scale=.1):
     return torch.randn(1, 1, n_dim) * scale
@@ -348,3 +329,14 @@ def _softmax(z, beta):
     if torch.any(torch.isnan(pi_a)):
         raise ValueError(f'Softmax produced nan: {z} -> {pi_a}')
     return pi_a
+
+
+if __name__ == "__main__":
+
+    import torch.nn.functional as F
+    import torch
+    x = torch.Tensor([1, 0, 0])
+    y = F.softmax(x)
+    print(y)
+    y1 = _softmax(x, 1)
+    F.log_softmax(x)
