@@ -6,17 +6,17 @@ gating_type=post
 n_epochs=15000
 sup_epoch=0
 
-for subj_id in {0..4}
+for subj_id in {0..3}
 do
   for lr in 1e-3
   do
     for B in 10 16
     do
-      for penalty in 1 4 8
+      for penalty in 1 4 16
       do
         for n_hidden in 128
         do
-          for cmpt in .5 1
+          for cmpt in .1 .5 1
           do
             for eta in .1
             do
