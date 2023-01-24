@@ -5,6 +5,7 @@ add_condition_label=0
 gating_type=post
 n_epochs=15000
 sup_epoch=0
+test_mode=1
 
 for subj_id in {0..3}
 do
