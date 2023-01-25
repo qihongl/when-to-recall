@@ -345,7 +345,7 @@ f.savefig(fig_path, dpi=100)
 
 '''analyze the results at the end of training '''
 # num of epochs to analyze
-npa = n_epochs_test
+npa = n_epochs
 
 # reformat data
 tq_dk_rs = np.reshape(tq_dk[-npa:], (-1, 3))
