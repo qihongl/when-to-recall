@@ -86,6 +86,7 @@ p = P(
     gating_type = gating_type, n_epochs = n_epochs, sup_epoch = sup_epoch, exp_name=exp_name, log_root=log_root
 )
 p.gen_log_dirs()
+
 '''init model and task'''
 np.random.seed(subj_id)
 torch.manual_seed(subj_id)

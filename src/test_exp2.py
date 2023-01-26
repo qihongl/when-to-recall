@@ -18,9 +18,9 @@ sns.set(style='white', palette='colorblind', context='poster')
 
 '''init params'''
 # env param
-subj_id = 0
+subj_id = 3
 B = 10
-penalty = 6
+penalty = 4
 # model param
 add_query_indicator = True
 add_condition_label = False
@@ -33,13 +33,16 @@ eta = 0.1
 n_epochs = 15000
 sup_epoch = 0
 test_mode = True
+log_root = '../log'
+exp_name = 'jan25-extra'
 
 # save all params
 p = P(
     subj_id=subj_id, B = B, penalty = penalty, n_hidden = n_hidden, lr = lr, cmpt = cmpt,
     eta = eta, test_mode = test_mode, add_query_indicator = add_query_indicator,
-    gating_type = gating_type, n_epochs = n_epochs, sup_epoch = sup_epoch
+    gating_type = gating_type, n_epochs = n_epochs, sup_epoch = sup_epoch, exp_name=exp_name,log_root=log_root,
 )
+
 p.gen_log_dirs()
 '''init model and task'''
 np.random.seed(subj_id)
@@ -55,12 +58,15 @@ agent = Agent(
 optimizer_sup = torch.optim.Adam(agent.parameters(), lr=lr)
 optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr)
 
+for p in agent.parameters():
+    print(p)
+
 '''load model '''
 n_epochs_kt = 100
 lr_kt = 0
 learning = False
-epoch_loaded = get_max_epoch_saved(p.log_dir)
-# epoch_loaded = 5999
+# epoch_loaded = get_max_epoch_saved(p.log_dir)
+epoch_loaded = 7999
 agent, optimizer = load_ckpt(epoch_loaded, p.log_dir, agent, optimizer_rl)
 optimizer_rl = torch.optim.Adam(agent.parameters(), lr=lr_kt)
 epoch_loaded += 1

@@ -47,7 +47,8 @@ class Parameters():
         self.sup_epoch = sup_epoch
         self.exp_name = exp_name
         self.log_root = log_root
-        sub_dirs = f'{exp_name}/B-{B}/n_hidden-{n_hidden}-lr-{lr}/gating-{gating_type}/task-unit-{int(add_query_indicator)}/penalty-{penalty}/train-mode-{int(test_mode)}-n_epochs-{n_epochs}-sup_epoch-{sup_epoch}/subj_id-{subj_id}/'
+        sub_dirs = f'{exp_name}/B-{B}/n_hidden-{n_hidden}-lr-{lr}/gating-{gating_type}/task-unit-{int(add_query_indicator)}/cmpt-{cmpt}/penalty-{penalty}/train-mode-{int(test_mode)}-n_epochs-{n_epochs}-sup_epoch-{sup_epoch}/subj_id-{subj_id}/'
+        # sub_dirs = f'{exp_name}/B-{B}/nH-{n_hidden}-lr-{lr}/{gating_type}/TU-{int(add_query_indicator)}/cmpt-{cmpt}/p-{penalty}/tr-{int(test_mode)}-ep-{n_epochs}/s-{subj_id}/'
         self.log_dir = os.path.join(log_root, sub_dirs)
         self.gen_log_dirs(verbose=verbose)
 

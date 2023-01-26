@@ -45,8 +45,8 @@ class LCALSTM_after(nn.Module):
         self.i2h = nn.Linear(self.input_dim, self.n_hidden_total)
         self.h2h = nn.Linear(rnn_hidden_dim, self.n_hidden_total)
         # deicion module
-        self.ih = nn.Linear(rnn_hidden_dim, dec_hidden_dim)
-        # self.ih = nn.Linear(rnn_hidden_dim+1, dec_hidden_dim)
+        # self.ih = nn.Linear(rnn_hidden_dim, dec_hidden_dim)
+        self.ih = nn.Linear(rnn_hidden_dim+1, dec_hidden_dim)
         self.actor = nn.Linear(dec_hidden_dim, output_dim)
         self.critic = nn.Linear(dec_hidden_dim, 1)
         # memory
@@ -101,9 +101,9 @@ class LCALSTM_after(nn.Module):
         # make 1st decision attempt
         h_t = torch.mul(o_t, c_t.tanh())
 
-        # h_t_m = torch.cat([h_t, torch.zeros(1).view(1, -1)], dim=1)
-        dec_act_t = F.relu(self.ih(h_t))
-        # dec_act_t = F.relu(self.ih(h_t_m))
+        h_t_m = torch.cat([h_t, torch.zeros(1).view(1, -1)], dim=1)
+        # dec_act_t = F.relu(self.ih(h_t))
+        dec_act_t = F.relu(self.ih(h_t_m))
         # recall / encode
         # hpc_input_t = torch.cat([c_t, dec_act_t], dim=1)
         # inps_t = sigmoid(self.hpc(hpc_input_t))
@@ -130,9 +130,9 @@ class LCALSTM_after(nn.Module):
         self.encode(cm_t)
         # make final dec
         # h_t = torch.mul(o_t, cm_t.tanh())
-        # h_t_m = torch.cat([h_t, mem_sig.view(1,-1)], dim=1)
-        dec_act_t = F.relu(self.ih(h_t))
-        # dec_act_t = F.relu(self.ih(h_t_m))
+        h_t_m = torch.cat([h_t, mem_diff.view(1,-1)], dim=1)
+        # dec_act_t = F.relu(self.ih(h_t))
+        dec_act_t = F.relu(self.ih(h_t_m))
         pi_a_t = _softmax(self.actor(dec_act_t), beta)
         value_t = self.critic(dec_act_t)
         # reshape data
