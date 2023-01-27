@@ -3,7 +3,7 @@
 add_query_indicator=1
 add_condition_label=0
 gating_type=post
-n_epochs=15000
+n_epochs=20000
 sup_epoch=0
 test_mode=1
 
@@ -17,7 +17,7 @@ do
       do
         for n_hidden in 64 128 256
         do
-          for cmpt in .1 .5 1
+          for cmpt in 0 .5 1
           do
             for eta in 0 .1 .2
             do

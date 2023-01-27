@@ -97,10 +97,14 @@ def ckpt_exists(log_dir):
         return True
     return False
 
-def get_max_epoch_saved(log_dir):
+def get_epoch_saved(log_dir):
     _, fnames = list_fnames(log_dir, 'ckpt*.pt')
     epoch_saved = [int(fname.split('-')[-1].split('.')[0]) for fname in fnames]
-    return max(epoch_saved)
+    return epoch_saved
+
+def get_max_epoch_saved(log_dir):
+    return max(get_epoch_saved(log_dir))
+
 
 
 if __name__ == "__main__":
