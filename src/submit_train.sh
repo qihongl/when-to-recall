@@ -13,9 +13,9 @@ do
   do
     for B in 10 16
     do
-      for penalty in 6
+      for penalty in 4 8
       do
-        for n_hidden in 64 128 256
+        for n_hidden in 128 256
         do
           for cmpt in 0 .5 1
           do
