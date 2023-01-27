@@ -229,6 +229,18 @@ def run_exp2(n_epochs, epoch_loaded=0, learning=True):
 # run the training scirpts
 _ = run_exp2(n_epochs, epoch_loaded=epoch_loaded, learning=learning)
 
+# '''testing the model'''
+#
+# '''load model '''
+# n_epochs_kt = 100
+# lr_kt = 0
+# learning = False
+# # epoch_loaded = get_max_epoch_saved(p.log_dir)
+# epoch_loaded = 7999
+# agent, _ = load_ckpt(epoch_loaded, p.log_dir, agent, optimizer)
+#
+#
+
 n_epochs = 100
 log_info = run_exp2(n_epochs, learning=False)
 [
