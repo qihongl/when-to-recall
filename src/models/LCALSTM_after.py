@@ -129,7 +129,7 @@ class LCALSTM_after(nn.Module):
         cm_t = c_t + m_t * em_g_t
         self.encode(cm_t)
         # make final dec
-        # h_t = torch.mul(o_t, cm_t.tanh())
+        h_t = torch.mul(o_t, cm_t.tanh())
         h_t_m = torch.cat([h_t, mem_diff.view(1,-1)], dim=1)
         # dec_act_t = F.relu(self.ih(h_t))
         dec_act_t = F.relu(self.ih(h_t_m))
