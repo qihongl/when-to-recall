@@ -7,19 +7,19 @@ n_epochs=20000
 sup_epoch=0
 test_mode=1
 
-for subj_id in {0..2}
+for subj_id in {0..3}
 do
   for lr in 1e-3
   do
-    for B in 10 16
+    for B in 10
     do
-      for penalty in 4 8
+      for penalty in 4 8 16 32
       do
-        for n_hidden in 128 256
+        for n_hidden in 128
         do
-          for cmpt in 0 .5 1
+          for cmpt in .5 1
           do
-            for eta in 0 .1 .2
+            for eta in .1 .2 .4
             do
             sbatch train.sh \
                  ${subj_id} \
