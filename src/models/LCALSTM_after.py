@@ -51,7 +51,7 @@ class LCALSTM_after(nn.Module):
         self.critic = nn.Linear(dec_hidden_dim, 1)
         # memory
         # self.hpc = nn.Linear(rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim, N_SSIG)
-        self.hpc = nn.Linear(rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim + 1, N_SSIG)
+        self.hpc = nn.Linear(1, N_SSIG)
         # if not add_condition_label:
         #     self.hpc = nn.Linear(rnn_hidden_dim + rnn_hidden_dim + dec_hidden_dim, N_SSIG)
         # else:
@@ -122,7 +122,8 @@ class LCALSTM_after(nn.Module):
         # recall_ent = entropy(ma_t, to_probs=True).view(1, -1)
         mem_diff = torch.abs(ma_t.squeeze()[0] - ma_t.squeeze()[1]).view(1, -1)
         # conflict = ma_t.squeeze()[0] * ma_t.squeeze()[1]
-        hpc_input_t = torch.cat([m_t, c_t, dec_act_t, mem_diff.view(1,-1)], dim=1)
+        # hpc_input_t = torch.cat([m_t, c_t, dec_act_t, mem_diff.view(1,-1)], dim=1)
+        hpc_input_t = torch.cat([mem_diff.view(1,-1)], dim=1)
         # print(hpc_input_t)
 
         em_g_t = sigmoid(self.hpc(hpc_input_t))

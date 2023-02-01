@@ -13,13 +13,13 @@ do
   do
     for B in 10
     do
-      for penalty in 4 8 16 32
+      for penalty in 4 8 16
       do
         for n_hidden in 128
         do
           for cmpt in .5 1
           do
-            for eta in .1 .2 .4
+            for eta in .1 .2 .3
             do
             sbatch train.sh \
                  ${subj_id} \

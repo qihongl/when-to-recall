@@ -179,7 +179,7 @@ def run_exp2(n_epochs, epoch_loaded=0, learning=True):
                     # loss_sup += criterion(yhat_t.view(1, -1), torch.argmax(Y[j][k][t]).view(-1,))
                     # log info
                     if not learning:
-                        log_acc[i][j][k].append(int(torch.argmax(yhat_t) == torch.argmax(Y[j][k][t])))
+                        log_acc[i][j][k].append(int(r_t > 0))
                         log_a[i][j][k].append(int(a_t))
                         log_dk[i][j][k].append(int(a_t) == exp.B)
                         if k == 2:
