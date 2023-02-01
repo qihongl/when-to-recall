@@ -87,7 +87,6 @@ p = P(
     exp_name=exp_name, log_root=log_root
 )
 p.gen_log_dirs()
-print(p.log_dir)
 
 '''init model and task'''
 np.random.seed(subj_id)
@@ -302,13 +301,13 @@ for epoch_loaded in epoch_loaded_list:
         return f, ax
 
     f, ax = plot_learning_curve('Cumulative R', log_return)
-    fig_path = os.path.join(p.log_dir, f'lr-r-ep-{epoch_save}.png')
+    fig_path = os.path.join(p.fig_dir, f'lr-r-ep-{epoch_save}.png')
     f.savefig(fig_path, dpi=100)
     f, ax = plot_learning_curve('Loss - actor', log_loss_a)
-    fig_path = os.path.join(p.log_dir, f'lr-a-ep-{epoch_save}.png')
+    fig_path = os.path.join(p.fig_dir, f'lr-a-ep-{epoch_save}.png')
     f.savefig(fig_path, dpi=100)
     f, ax = plot_learning_curve('Loss - critic', log_loss_c)
-    fig_path = os.path.join(p.log_dir, f'lr-c-ep-{epoch_save}.png')
+    fig_path = os.path.join(p.fig_dir, f'lr-c-ep-{epoch_save}.png')
     f.savefig(fig_path, dpi=100)
 
 
@@ -317,7 +316,7 @@ for epoch_loaded in epoch_loaded_list:
     f, ax = plot_learning_curve('Within trial query acc', wtq_acc)
     ax.axhline(chance, linestyle='--', color='grey', label='chance')
     ax.legend()
-    fig_path = os.path.join(p.log_dir, f'lr-wtq-acc-ep-{epoch_save}.png')
+    fig_path = os.path.join(p.fig_dir, f'lr-wtq-acc-ep-{epoch_save}.png')
     f.savefig(fig_path, dpi=100)
 
 
@@ -325,14 +324,14 @@ for epoch_loaded in epoch_loaded_list:
     f, ax = plot_learning_curve('Test query acc', np.mean(tq_acc,axis=-1))
     ax.axhline(chance, linestyle='--', color='grey', label='chance')
     ax.legend()
-    fig_path = os.path.join(p.log_dir, f'lr-tq-acc-ep-{epoch_save}.png')
+    fig_path = os.path.join(p.fig_dir, f'lr-tq-acc-ep-{epoch_save}.png')
     f.savefig(fig_path, dpi=100)
 
     cp_acc = get_copy_mean(log_acc)
     f, ax = plot_learning_curve('Copy acc', np.mean(cp_acc,axis=-1))
     ax.axhline(chance, linestyle='--', color='grey', label='chance')
     ax.legend()
-    fig_path = os.path.join(p.log_dir, f'lr-cp-acc-ep-{epoch_save}.png')
+    fig_path = os.path.join(p.fig_dir, f'lr-cp-acc-ep-{epoch_save}.png')
     f.savefig(fig_path, dpi=100)
 
 
@@ -341,7 +340,7 @@ for epoch_loaded in epoch_loaded_list:
     f, ax = plot_learning_curve('Within trial query, p(dk)', wtq_dk)
     ax.set_ylim([-.05,1.05])
     ax.legend()
-    fig_path = os.path.join(p.log_dir, f'pdk-wtq-ep-{epoch_save}.png')
+    fig_path = os.path.join(p.fig_dir, f'pdk-wtq-ep-{epoch_save}.png')
     f.savefig(fig_path, dpi=100)
 
 
@@ -349,7 +348,7 @@ for epoch_loaded in epoch_loaded_list:
     f, ax = plot_learning_curve('Test query, p(dk)', np.mean(tq_dk,axis=-1))
     ax.set_ylim([-.05,1.05])
     ax.legend()
-    fig_path = os.path.join(p.log_dir, f'pdk-tq-ep-{epoch_save}.png')
+    fig_path = os.path.join(p.fig_dir, f'pdk-tq-ep-{epoch_save}.png')
     f.savefig(fig_path, dpi=100)
 
 
@@ -357,7 +356,7 @@ for epoch_loaded in epoch_loaded_list:
     f, ax = plot_learning_curve('Copy, p(dk)', np.mean(cp_dk,axis=-1))
     ax.set_ylim([-.05,1.05])
     ax.legend()
-    fig_path = os.path.join(p.log_dir, f'pdk-cp-ep-{epoch_save}.png')
+    fig_path = os.path.join(p.fig_dir, f'pdk-cp-ep-{epoch_save}.png')
     f.savefig(fig_path, dpi=100)
 
     '''analyze the results at the end of training '''
@@ -406,7 +405,7 @@ for epoch_loaded in epoch_loaded_list:
     f.legend(['chance', 'high d', 'low d'], loc=(.51,.5))
     sns.despine()
     f.tight_layout()
-    fig_path = os.path.join(p.log_dir, f'performance-ep-{epoch_save}.png')
+    fig_path = os.path.join(p.fig_dir, f'performance-ep-{epoch_save}.png')
     f.savefig(fig_path, dpi=100)
 
 
@@ -436,7 +435,7 @@ for epoch_loaded in epoch_loaded_list:
     ax.legend()
     sns.despine()
     f.tight_layout()
-    fig_path = os.path.join(p.log_dir, f'emgate-ep-{epoch_save}.png')
+    fig_path = os.path.join(p.fig_dir, f'emgate-ep-{epoch_save}.png')
     f.savefig(fig_path, dpi=100)
 
     # plot memory activation
@@ -456,5 +455,5 @@ for epoch_loaded in epoch_loaded_list:
         ax.set_xticklabels(x_ticklabels)
     sns.despine()
     f.tight_layout()
-    fig_path = os.path.join(p.log_dir, f'mem-act-ep-{epoch_save}.png')
+    fig_path = os.path.join(p.fig_dir, f'mem-act-ep-{epoch_save}.png')
     f.savefig(fig_path, dpi=100)

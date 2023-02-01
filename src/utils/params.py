@@ -48,13 +48,15 @@ class Parameters():
         self.exp_name = exp_name
         self.log_root = log_root
         sub_dirs = f'{exp_name}/B-{B}/n_hidden-{n_hidden}-lr-{lr}/gating-{gating_type}/task-unit-{int(add_query_indicator)}/cmpt-{cmpt}/eta-{eta}/penalty-{penalty}/train-mode-{int(test_mode)}-n_epochs-{n_epochs}-sup_epoch-{sup_epoch}/subj_id-{subj_id}/'
-        # sub_dirs = f'{exp_name}/B-{B}/nH-{n_hidden}-lr-{lr}/{gating_type}/TU-{int(add_query_indicator)}/cmpt-{cmpt}/p-{penalty}/tr-{int(test_mode)}-ep-{n_epochs}/s-{subj_id}/'
-        self.log_dir = os.path.join(log_root, sub_dirs)
+        self.log_dir = os.path.join(self.log_root, f'{exp_name}-ckpt', sub_dirs)
+        self.fig_dir = os.path.join(self.log_root, f'{exp_name}-fig', sub_dirs)
+        self.result_dir = os.path.join(self.log_root, f'{exp_name}-result', sub_dirs)
         self.gen_log_dirs(verbose=verbose)
 
-    def gen_log_dirs(self, verbose=False):
+    def gen_log_dirs(self, verbose=True):
         mkdir_ifdne(self.log_dir, verbose)
-        return self.log_dir
+        mkdir_ifdne(self.fig_dir, verbose)
+        mkdir_ifdne(self.result_dir, verbose)
 
     def log_dir_exists(self):
         if os.path.exists(self.log_dir):
@@ -62,9 +64,11 @@ class Parameters():
         return False
 
 
-def mkdir_ifdne(dir_name, verbose=False):
+def mkdir_ifdne(dir_name, verbose=True):
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
+        if verbose:
+            print(dir_name)
     else:
         if verbose:
             print(f'Dir exist: {dir_name}')
